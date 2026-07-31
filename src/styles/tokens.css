@@ -1,0 +1,45 @@
+/* linuxmeeter design system — single source of truth.
+   Ported verbatim from mockup/index.html (approved 2026-07-31, amber accent). */
+:root {
+  /* ---- surfaces ---- */
+  --bg-0: #0A0B0D;
+  --bg-1: #121317;
+  --bg-2: #17181D;
+  --bg-3: #1E2026;
+  --bg-4: #262932;
+  --border-0: #26282F;
+  --border-1: #34373F;
+  --hl-top: rgba(255, 255, 255, 0.05);
+
+  /* ---- text ---- */
+  --text-1: #E8EAED;
+  --text-2: #9BA1AB;
+  --text-3: #5C616B;
+
+  /* ---- accent: amber ---- */
+  --accent:      #FFB020;
+  --accent-hi:   #FFC554;
+  --accent-lo:   #D98F0D;
+  --accent-glow: rgba(255, 176, 32, 0.14);
+  --on-accent:   #1A1002;
+
+  /* ---- meters & states ---- */
+  --meter-green: #2BD96A;
+  --meter-amber: #F5B800;
+  --meter-red:   #FF453A;
+  --meter-peak:  rgba(255, 255, 255, 0.85);
+  --clip:        #FF2E43;
+  --mute:        #E5484D;
+  --solo:        #FFB224;
+  --focus-ring:  var(--accent);
+
+  /* ---- layout ---- */
+  --strip-w: 112px;
+  --bus-w: 96px;
+  --fader-h: 200px;
+  --topbar-h: 40px;
+
+  /* ---- type ---- */
+  --mono: "JetBrainsMono Nerd Font", "JetBrains Mono", ui-monospace, monospace;
+  --ui: "Inter Variable", Inter, system-ui, sans-serif;
+}

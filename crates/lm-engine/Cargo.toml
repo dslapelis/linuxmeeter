@@ -1,0 +1,20 @@
+[package]
+name = "lm-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+lm-protocol = { path = "../lm-protocol" }
+pipewire = "0.10"
+libspa = "0.10"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tracing-subscriber.workspace = true
+
+[[example]]
+name = "spike"

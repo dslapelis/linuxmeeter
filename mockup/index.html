@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>linuxmeeter — design mockup</title>
+<style>
+:root {
+  /* ---- surfaces ---- */
+  --bg-0: #0A0B0D;
+  --bg-1: #121317;
+  --bg-2: #17181D;
+  --bg-3: #1E2026;
+  --bg-4: #262932;
+  --border-0: #26282F;
+  --border-1: #34373F;
+  --hl-top: rgba(255,255,255,0.05);
+  /* ---- text ---- */
+  --text-1: #E8EAED;
+  --text-2: #9BA1AB;
+  --text-3: #5C616B;
+  /* ---- accent (keys 1/2/3 swap these) — amber approved 2026-07-31 ---- */
+  --accent:      #FFB020;
+  --accent-hi:   #FFC554;
+  --accent-lo:   #D98F0D;
+  --accent-glow: rgba(255,176,32,0.14);
+  --on-accent:   #1A1002;
+  /* ---- meters & states ---- */
+  --meter-green: #2BD96A;
+  --meter-amber: #F5B800;
+  --meter-red:   #FF453A;
+  --meter-peak:  rgba(255,255,255,0.85);
+  --clip:        #FF2E43;
+  --mute:        #E5484D;
+  --solo:        #FFB224;
+  --focus-ring:  var(--accent);
+  /* ---- layout ---- */
+  --strip-w: 112px;
+  --bus-w: 96px;
+  --fader-h: 200px;
+  --mono: "JetBrainsMono Nerd Font", "JetBrains Mono", ui-monospace, monospace;
+  --ui: "Inter Variable", Inter, system-ui, sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  background: var(--bg-0);
+  color: var(--text-1);
+  font-family: var(--ui);
+  font-size: 13px;
+  font-feature-settings: "cv05", "tnum";
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+}
+button { font-family: inherit; border: none; background: none; color: inherit; cursor: pointer; }
+:focus-visible { outline: 1px solid var(--focus-ring); outline-offset: 1px; }
+
+#app { height: 100%; display: flex; flex-direction: column; }
+
+/* ================= top bar ================= */
+.topbar {
+  flex: none; height: 40px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border-0);
+  display: flex; align-items: center;
+  padding-left: 12px; gap: 12px;
+}
+.wordmark {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.14em;
+  color: var(--text-2);
+}
+.wordmark::before {
+  content: ""; width: 8px; height: 8px;
+  background: var(--accent); border-radius: 1px;
+}
+.tb-center { margin: 0 auto; display: flex; align-items: center; gap: 6px; }
+.chip {
+  height: 24px; padding: 0 8px;
+  display: flex; align-items: center; gap: 6px;
+  background: var(--bg-3); border: 1px solid var(--border-0); border-radius: 2px;
+  box-shadow: inset 0 1px 0 var(--hl-top);
+  font-size: 12px; color: var(--text-1);
+}
+.chip:hover { background: var(--bg-4); }
+.chip svg { color: var(--text-3); }
+.iconbtn {
+  width: 28px; height: 24px; border-radius: 2px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-2);
+}
+.iconbtn:hover { background: var(--bg-4); color: var(--text-1); }
+.tb-right { display: flex; align-items: center; height: 100%; }
+.winbtn {
+  width: 46px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-2);
+}
+.winbtn:hover { background: var(--bg-4); color: var(--text-1); }
+.winbtn.close:hover { background: var(--mute); color: #fff; }
+
+/* ================= rack ================= */
+.rack {
+  flex: 1; display: flex; align-items: flex-start;
+  gap: 16px; padding: 16px;
+  background: var(--bg-1);
+  overflow-x: auto; overflow-y: auto;
+}
+.rack::-webkit-scrollbar { height: 6px; width: 6px; }
+.rack::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 3px; }
+.rack::-webkit-scrollbar-track { background: transparent; }
+
+.group { display: flex; flex-direction: column; gap: 8px; flex: none; }
+.grouplabel {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-2);
+  padding-left: 2px;
+}
+.striprow { display: flex; gap: 8px; }
+
+.busgroup {
+  position: sticky; right: 16px; margin-left: auto;
+  background: var(--bg-1);
+  padding-left: 16px;
+  border-left: 1px solid var(--border-0);
+  box-shadow: -16px 0 24px rgba(10,11,13,0.55);
+}
+
+/* ================= strip ================= */
+.strip {
+  width: var(--strip-w); flex: none;
+  background: var(--bg-2);
+  border: 1px solid var(--border-0); border-radius: 4px;
+  box-shadow: inset 0 1px 0 var(--hl-top);
+  padding: 8px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.strip.bus { width: var(--bus-w); }
+.sep { height: 1px; background: var(--border-0); margin: 0 -8px; }
+
+.head { display: flex; flex-direction: column; gap: 5px; }
+.nrow { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.busid {
+  font: 600 10px var(--mono); letter-spacing: 0.08em;
+  color: var(--accent);
+}
+.name {
+  font-size: 12px; font-weight: 600; color: var(--text-1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dev {
+  height: 22px; padding: 0 6px;
+  display: flex; align-items: center; gap: 4px;
+  background: var(--bg-3); border: 1px solid var(--border-0); border-radius: 2px;
+  box-shadow: inset 0 1px 0 var(--hl-top);
+  font-size: 11px; color: var(--text-2);
+  cursor: pointer;
+}
+.dev:hover { background: var(--bg-4); color: var(--text-1); }
+.dev span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dev svg { flex: none; color: var(--text-3); }
+
+/* ---- meter / scale / fader row ---- */
+.mf { display: flex; justify-content: center; gap: 5px; padding-top: 8px; }
+canvas.meter { width: 10px; height: var(--fader-h); display: block; }
+.scale { position: relative; width: 23px; height: var(--fader-h); }
+.tick {
+  position: absolute; right: 0; transform: translateY(-50%);
+  display: flex; align-items: center; justify-content: flex-end; gap: 3px;
+  width: 100%;
+  font: 500 9px var(--mono); color: var(--text-3);
+}
+.tick i { display: block; width: 4px; height: 1px; background: var(--border-1); }
+.tick.zero { color: var(--text-2); }
+.tick.zero i { width: 7px; background: var(--text-3); }
+
+.fader { position: relative; width: 34px; height: var(--fader-h); cursor: ns-resize; touch-action: none; }
+.fader .track {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  top: 0; bottom: 0; width: 4px;
+  background: var(--bg-0); border-radius: 2px;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.6);
+}
+.fader .handle {
+  position: absolute; left: 0; width: 34px; height: 14px;
+  background: var(--bg-3);
+  border: 1px solid var(--border-1); border-radius: 2px;
+  box-shadow: inset 0 1px 0 var(--hl-top), 0 1px 2px rgba(0,0,0,0.4);
+}
+.fader .handle::after {
+  content: ""; position: absolute; left: 4px; right: 4px; top: 50%; height: 2px;
+  transform: translateY(-50%);
+  background: var(--text-1); border-radius: 1px;
+}
+.fader:hover .handle { background: var(--bg-4); }
+.fader.dragging .handle { border-color: var(--accent); }
+
+.readout {
+  font: 500 11px var(--mono); letter-spacing: 0.02em;
+  color: var(--text-1); text-align: center;
+  margin-top: -2px;
+}
+
+/* ---- knobs ---- */
+.knobs { display: flex; justify-content: center; align-items: flex-start; gap: 8px; }
+.knob { width: 34px; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: ns-resize; touch-action: none; }
+.knob .lbl {
+  font-size: 10px; letter-spacing: 0.04em; color: var(--text-2);
+  white-space: nowrap;
+}
+.knob .lbl.val { font: 500 10px var(--mono); color: var(--text-1); letter-spacing: 0; }
+.knob svg { display: block; }
+.eqbtn {
+  margin-top: 3px; height: 22px; width: 26px;
+  font: 500 10px var(--mono); letter-spacing: 0.06em;
+  background: var(--bg-3); color: var(--text-3);
+  border: 1px solid var(--border-0); border-radius: 2px;
+  box-shadow: inset 0 1px 0 var(--hl-top);
+}
+.eqbtn:hover { background: var(--bg-4); color: var(--text-2); }
+.eqbtn.active { background: var(--accent-glow); color: var(--accent); border-color: var(--accent); }
+
+/* ---- routing + mute/solo ---- */
+.routes { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.rbtn, .msbtn {
+  height: 22px;
+  font: 500 10px var(--mono); letter-spacing: 0.06em;
+  background: var(--bg-3); color: var(--text-3);
+  border: 1px solid var(--border-0); border-radius: 2px;
+  box-shadow: inset 0 1px 0 var(--hl-top);
+}
+.rbtn:hover, .msbtn:hover { background: var(--bg-4); color: var(--text-2); }
+.rbtn.active { background: var(--accent-glow); color: var(--accent); border-color: var(--accent); }
+.ms { display: flex; gap: 4px; }
+.msbtn { flex: 1; }
+.msbtn.m.active { background: var(--mute); color: #1A0506; border-color: var(--mute); }
+.msbtn.s.active { background: var(--solo); color: #1A1002; border-color: var(--solo); }
+
+/* ================= hint bar ================= */
+.hints {
+  flex: none; height: 26px;
+  background: var(--bg-1); border-top: 1px solid var(--border-0);
+  display: flex; align-items: center; justify-content: center; gap: 18px;
+  font-size: 11px; color: var(--text-3);
+}
+.hints b { font: 500 11px var(--mono); color: var(--text-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="wordmark">LINUXMEETER</div>
+    <div class="tb-center">
+      <button class="chip">Default
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2.5 4l2.5 2.5L7.5 4" stroke="currentColor" stroke-width="1.25"/></svg>
+      </button>
+      <button class="iconbtn" title="Save profile">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 2h8l3 3v9H3V2z" stroke="currentColor" stroke-width="1.25"/><path d="M5.5 2v3.5h5V2M5 14v-4h6v4" stroke="currentColor" stroke-width="1.25"/></svg>
+      </button>
+    </div>
+    <button class="iconbtn" title="Settings">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2.2" stroke="currentColor" stroke-width="1.25"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M12.6 3.4l-1.4 1.4M4.8 11.2l-1.4 1.4" stroke="currentColor" stroke-width="1.25"/></svg>
+    </button>
+    <div class="tb-right">
+      <button class="winbtn" title="Minimize"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6h8" stroke="currentColor" stroke-width="1.25"/></svg></button>
+      <button class="winbtn" title="Maximize"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="2.5" y="2.5" width="7" height="7" stroke="currentColor" stroke-width="1.25"/></svg></button>
+      <button class="winbtn close" title="Close"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" stroke-width="1.25"/></svg></button>
+    </div>
+  </header>
+
+  <main class="rack">
+    <section class="group" id="g-hw"><div class="grouplabel">Hardware</div><div class="striprow"></div></section>
+    <section class="group" id="g-virt"><div class="grouplabel">Virtual</div><div class="striprow"></div></section>
+    <section class="group busgroup" id="g-bus"><div class="grouplabel">Buses</div><div class="striprow"></div></section>
+  </main>
+
+  <footer class="hints">
+    <span><b>1/2/3</b> accent cyan/amber/lime</span>
+    <span><b>S</b> meter style</span>
+    <span><b>D</b> strip density</span>
+    <span><b>click meter</b> clear clip</span>
+    <span style="opacity:.6">design mockup — no audio</span>
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   linuxmeeter M0 design mockup.
+   All values here mirror the design spec; approved tokens copy
+   verbatim into src/styles/tokens.css.
+   ============================================================ */
+
+/* ---------- fader taper: position(0..1) <-> dB ---------- */
+const BP = [[0, -72], [0.08, -50], [0.30, -30], [0.55, -12], [0.78, 0], [1, 12]];
+function posToDb(p) {
+  if (p <= 0) return -Infinity;
+  p = Math.min(1, p);
+  for (let i = 0; i < BP.length - 1; i++) {
+    const [p0, d0] = BP[i], [p1, d1] = BP[i + 1];
+    if (p <= p1) return d0 + (d1 - d0) * (p - p0) / (p1 - p0);
+  }
+  return 12;
+}
+function dbToPos(d) {
+  if (d === -Infinity || d <= -72) return 0;
+  d = Math.min(12, d);
+  for (let i = 0; i < BP.length - 1; i++) {
+    const [p0, d0] = BP[i], [p1, d1] = BP[i + 1];
+    if (d <= d1) return p0 + (p1 - p0) * (d - d0) / (d1 - d0);
+  }
+  return 1;
+}
+const fmtDb = d => d === -Infinity || d <= -71 ? "-∞" : (d > 0 ? "+" : "") + d.toFixed(1);
+
+/* ---------- strip data ---------- */
+const INPUTS = [
+  { id: "hw1", name: "Mic",     device: "Scarlett 2i2 USB", gain: -4.0, routes: { A2: 1, B1: 1 },        sim: { kind: "speech", base: -24, spread: 9 } },
+  { id: "hw2", name: "Line In", device: "ALC1220 Analog",   gain: -12.0, routes: { A1: 1 },              sim: { kind: "steady", base: -36, spread: 3 } },
+  { id: "v1",  name: "System",  device: "lm.strip.system",  gain: 0.0,  routes: { A1: 1, A2: 1 },        sim: { kind: "steady", base: -30, spread: 6 } },
+  { id: "v2",  name: "Music",   device: "lm.strip.music",   gain: -3.2, routes: { A1: 1, A2: 1, B1: 1 }, sim: { kind: "music",  base: -11, spread: 4 } },
+  { id: "v3",  name: "Chat",    device: "lm.strip.chat",    gain: -6.0, routes: { A2: 1, B1: 1 },        sim: { kind: "speech", base: -22, spread: 8 } },
+];
+const BUSES = [
+  { id: "A1", name: "Speakers",   device: "HDMI / DP",       gain: 0.0 },
+  { id: "A2", name: "Headphones", device: "Scarlett 2i2",    gain: -2.5 },
+  { id: "B1", name: "Stream Mic", device: "virtual source",  gain: 0.0 },
+  { id: "B2", name: "Aux",        device: "virtual source",  gain: -6.0 },
+];
+const SCALE_DBS = [12, 6, 0, -6, -12, -20, -30, -40, -60];
+
+/* ---------- shared vertical-drag grammar ----------
+   drag / Shift = 10x fine / Esc = cancel / dblclick = reset / wheel step */
+function vdrag(el, opts) {
+  let startVal = 0, lastY = 0, val = 0, dragging = false;
+  el.addEventListener("pointerdown", e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    el.setPointerCapture(e.pointerId);
+    dragging = true;
+    startVal = val = opts.get();
+    lastY = e.clientY;
+    if (opts.jump) { val = opts.jump(e); opts.set(val); }
+    el.classList.add("dragging");
+  });
+  el.addEventListener("pointermove", e => {
+    if (!dragging) return;
+    const fine = e.shiftKey ? 0.1 : 1;
+    val = Math.max(0, Math.min(1, val + (lastY - e.clientY) / opts.pixels * fine));
+    lastY = e.clientY;
+    opts.set(val);
+  });
+  el.addEventListener("pointerup", () => { dragging = false; el.classList.remove("dragging"); });
+  window.addEventListener("keydown", e => {
+    if (dragging && e.key === "Escape") { dragging = false; el.classList.remove("dragging"); opts.set(startVal); }
+  });
+  el.addEventListener("dblclick", () => opts.set(opts.reset));
+  el.addEventListener("wheel", e => {
+    e.preventDefault();
+    const dir = e.deltaY < 0 ? 1 : -1;
+    opts.set(Math.max(0, Math.min(1, opts.get() + dir * (e.shiftKey ? opts.wheel / 5 : opts.wheel))));
+  }, { passive: false });
+}
+
+/* ---------- knob SVG ---------- */
+function polar(cx, cy, r, deg) {
+  const a = (deg - 90) * Math.PI / 180;
+  return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+}
+function arcPath(cx, cy, r, a0, a1) {
+  const [x0, y0] = polar(cx, cy, r, a0), [x1, y1] = polar(cx, cy, r, a1);
+  return `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+}
+const KA0 = -135, KSWEEP = 270;
+function makeKnob({ label, min, max, value, unit = " dB" }) {
+  const root = document.createElement("div");
+  root.className = "knob";
+  root.innerHTML =
+    `<svg width="28" height="28" viewBox="0 0 28 28">
+       <path d="${arcPath(14, 14, 12, KA0, KA0 + KSWEEP)}" stroke="var(--border-1)" stroke-width="2" fill="none"/>
+       <path class="kval" stroke="var(--accent)" stroke-width="2" fill="none"/>
+       <circle cx="14" cy="14" r="8.5" fill="var(--bg-3)" stroke="var(--border-0)"/>
+       <line class="kind" x1="14" y1="11.5" x2="14" y2="7" stroke="var(--text-1)" stroke-width="2" stroke-linecap="round"/>
+     </svg><div class="lbl">${label}</div>`;
+  const kval = root.querySelector(".kval");
+  const kind = root.querySelector(".kind");
+  const lbl = root.querySelector(".lbl");
+  let t = (value - min) / (max - min);
+  const cur = () => min + (max - min) * t;
+  function render() {
+    const a = KA0 + KSWEEP * t;
+    kval.setAttribute("d", t > 0.004 ? arcPath(14, 14, 12, KA0, a) : "");
+    kind.setAttribute("transform", `rotate(${a} 14 14)`);
+    if (showVal) { lbl.textContent = cur().toFixed(1) + unit; lbl.classList.add("val"); }
+    else { lbl.textContent = label; lbl.classList.remove("val"); }
+  }
+  let showVal = false;
+  root.addEventListener("pointerenter", () => { showVal = true; render(); });
+  root.addEventListener("pointerleave", () => { showVal = false; render(); });
+  vdrag(root, {
+    get: () => t, set: v => { t = v; render(); },
+    pixels: 150, reset: (value - min) / (max - min), wheel: 0.025,
+  });
+  render();
+  return root;
+}
+
+/* ---------- meter ---------- */
+const meters = [];
+let segmented = false;
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+let MC = {};
+function refreshMeterColors() {
+  MC = {
+    trough: css("--bg-0"), green: css("--meter-green"), amber: css("--meter-amber"),
+    red: css("--meter-red"), hold: css("--meter-peak"), clip: css("--clip"),
+  };
+}
+refreshMeterColors();
+const CLIP_H = 4, GAP = 2;
+function zoneColor(db) { return db >= -6 ? MC.red : db >= -18 ? MC.amber : MC.green; }
+
+function makeMeter(sim) {
+  const c = document.createElement("canvas");
+  c.className = "meter";
+  const dpr = window.devicePixelRatio || 1;
+  c.width = 10 * dpr; c.height = 200 * dpr;
+  const ctx = c.getContext("2d", { alpha: false });
+  const m = {
+    sim, ctx, dpr,
+    peak: [-90, -90], rms: [-90, -90], hold: [-90, -90], holdT: [0, 0], clip: false,
+  };
+  c.addEventListener("click", e => {
+    if (e.altKey) meters.forEach(x => x.clip = false); else m.clip = false;
+  });
+  meters.push(m);
+  return c;
+}
+function drawMeter(m, now) {
+  const { ctx, dpr } = m;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = MC.trough;
+  ctx.fillRect(0, 0, 10, 200);
+  const barTop = CLIP_H + GAP, barH = 200 - barTop;
+  const yFor = db => barTop + (1 - Math.max(0, Math.min(1, (db + 60) / 60))) * barH;
+  /* trough tick marks */
+  ctx.fillStyle = "rgba(255,255,255,0.06)";
+  for (const t of [-6, -18, -40]) ctx.fillRect(0, Math.round(yFor(t)), 10, 1);
+  for (let ch = 0; ch < 2; ch++) {
+    const x = ch * 6;
+    const rms = m.rms[ch], peak = m.peak[ch], hold = m.hold[ch];
+    if (segmented) {
+      for (let y = 200 - 4; y >= barTop; y -= 4) {
+        const segDb = -60 + (1 - (y + 3 - barTop) / barH) * 60;
+        if (rms >= segDb) ctx.fillStyle = zoneColor(segDb);
+        else ctx.fillStyle = "rgba(255,255,255,0.03)";
+        ctx.fillRect(x, y, 4, 3);
+      }
+    } else {
+      const zones = [[-60, -18, MC.green], [-18, -6, MC.amber], [-6, 0, MC.red]];
+      ctx.globalAlpha = 0.9;
+      for (const [lo, hi, col] of zones) {
+        const top = Math.min(hi, rms);
+        if (top > lo) {
+          ctx.fillStyle = col;
+          ctx.fillRect(x, yFor(top), 4, yFor(lo) - yFor(top));
+        }
+      }
+      ctx.globalAlpha = 1;
+      if (peak > -60) {
+        ctx.fillStyle = zoneColor(peak);
+        ctx.fillRect(x, Math.round(yFor(peak)) - 1, 4, 2);
+      }
+    }
+    if (hold > -59) {
+      ctx.fillStyle = MC.hold;
+      ctx.fillRect(x, Math.round(yFor(hold)), 4, 1);
+    }
+  }
+  /* clip cell */
+  ctx.fillStyle = m.clip ? MC.clip : "rgba(255,255,255,0.05)";
+  ctx.fillRect(0, 0, 10, CLIP_H);
+}
+
+/* ---------- signal simulation (fake but musical) ---------- */
+function makeSim(cfg, id) {
+  const ph = (id.charCodeAt(0) * 7 + id.charCodeAt(id.length - 1) * 13) % 17;
+  return { ...cfg, ph, n: 0, out: -90 };
+}
+function simLevel(s, t, dt) {
+  s.n = Math.max(-3, Math.min(3, (s.n + (Math.random() - 0.5) * dt * 40) * 0.985));
+  let db;
+  if (s.kind === "speech") {
+    const active = Math.sin(t * 0.55 + s.ph) + Math.sin(t * 1.7 + s.ph * 2) * 0.5 > -0.1;
+    db = active ? s.base + Math.sin(t * 6 + s.ph) * s.spread * 0.4 + s.n * 2 : -90;
+  } else if (s.kind === "music") {
+    const beat = Math.pow(Math.max(0, Math.sin(t * Math.PI * 2 * 1.9 + s.ph)), 10) * 7;
+    db = s.base + beat + Math.sin(t * 0.23 + s.ph) * s.spread * 0.5 + s.n;
+  } else {
+    db = s.base + Math.sin(t * 0.4 + s.ph) * s.spread * 0.5 + s.n;
+  }
+  s.out += (db - s.out) * Math.min(1, dt * (db > s.out ? 30 : 9));
+  return s.out;
+}
+const pow = db => db <= -85 ? 0 : Math.pow(10, db / 10);
+const toDb = p => p <= 0 ? -90 : 10 * Math.log10(p);
+
+/* ---------- strip construction ---------- */
+const state = { inputs: [], buses: [] };
+
+function buildScale() {
+  const sc = document.createElement("div");
+  sc.className = "scale";
+  for (const d of SCALE_DBS) {
+    const t = document.createElement("div");
+    t.className = "tick" + (d === 0 ? " zero" : "");
+    t.style.top = (1 - dbToPos(d)) * 200 + "px";
+    t.innerHTML = `${d === 0 ? "0" : Math.abs(d)}<i></i>`;
+    sc.appendChild(t);
+  }
+  return sc;
+}
+
+function buildFader(obj) {
+  const f = document.createElement("div");
+  f.className = "fader";
+  f.innerHTML = `<div class="track"></div><div class="handle"></div>`;
+  const handle = f.querySelector(".handle");
+  function render() {
+    handle.style.top = (1 - dbToPos(obj.gain)) * 200 - 7 + "px";
+    obj.readout.textContent = fmtDb(obj.gain);
+  }
+  obj.renderFader = render;
+  vdrag(f, {
+    get: () => dbToPos(obj.gain),
+    set: p => { obj.gain = posToDb(p); render(); },
+    jump: e => 1 - (e.clientY - f.getBoundingClientRect().top) / 200,
+    pixels: 200, reset: dbToPos(0), wheel: 0.5 / 84, /* ~0.5 dB near unity */
+  });
+  return f;
+}
+
+const chev = `<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2.5 4l2.5 2.5L7.5 4" stroke="currentColor" stroke-width="1.25"/></svg>`;
+
+function buildInputStrip(cfg) {
+  const o = { ...cfg, mute: false, solo: false, sim: makeSim(cfg.sim, cfg.id) };
+  const el = document.createElement("div");
+  el.className = "strip input";
+  el.innerHTML = `
+    <div class="head">
+      <div class="nrow"><div class="name">${cfg.name}</div></div>
+      <div class="dev"><span>${cfg.device}</span>${chev}</div>
+    </div>`;
+  const mf = document.createElement("div");
+  mf.className = "mf";
+  o.meterCanvas = makeMeter(o.sim);
+  o.meter = meters[meters.length - 1];
+  o.readout = document.createElement("div");
+  o.readout.className = "readout";
+  mf.append(o.meterCanvas, buildScale(), buildFader(o));
+  el.append(mf, o.readout);
+
+  const sep1 = document.createElement("div"); sep1.className = "sep";
+  const knobs = document.createElement("div");
+  knobs.className = "knobs";
+  knobs.append(
+    makeKnob({ label: "GATE", min: -70, max: 0, value: -40 }),
+    makeKnob({ label: "COMP", min: -60, max: 0, value: -18 }),
+  );
+  const eq = document.createElement("button");
+  eq.className = "eqbtn"; eq.textContent = "EQ";
+  eq.addEventListener("click", () => eq.classList.toggle("active"));
+  knobs.append(eq);
+  el.append(sep1, knobs);
+
+  const sep2 = document.createElement("div"); sep2.className = "sep";
+  const routes = document.createElement("div");
+  routes.className = "routes";
+  for (const b of BUSES) {
+    const btn = document.createElement("button");
+    btn.className = "rbtn" + (cfg.routes[b.id] ? " active" : "");
+    btn.textContent = b.id;
+    btn.setAttribute("aria-pressed", !!cfg.routes[b.id]);
+    btn.addEventListener("click", () => {
+      o.routes[b.id] = !o.routes[b.id];
+      btn.classList.toggle("active", !!o.routes[b.id]);
+      btn.setAttribute("aria-pressed", !!o.routes[b.id]);
+    });
+    routes.append(btn);
+  }
+  el.append(sep2, routes);
+
+  const ms = document.createElement("div");
+  ms.className = "ms";
+  const mb = document.createElement("button");
+  mb.className = "msbtn m"; mb.textContent = "M";
+  mb.addEventListener("click", () => { o.mute = !o.mute; mb.classList.toggle("active", o.mute); });
+  const sb = document.createElement("button");
+  sb.className = "msbtn s"; sb.textContent = "S";
+  sb.addEventListener("click", () => { o.solo = !o.solo; sb.classList.toggle("active", o.solo); });
+  ms.append(mb, sb);
+  el.append(ms);
+
+  o.renderFader();
+  state.inputs.push(o);
+  return el;
+}
+
+function buildBusStrip(cfg) {
+  const o = { ...cfg, mute: false };
+  const el = document.createElement("div");
+  el.className = "strip bus";
+  el.innerHTML = `
+    <div class="head">
+      <div class="nrow"><span class="busid">${cfg.id}</span><div class="name">${cfg.name}</div></div>
+      <div class="dev"><span>${cfg.device}</span>${chev}</div>
+    </div>`;
+  const mf = document.createElement("div");
+  mf.className = "mf";
+  o.meterCanvas = makeMeter(null);
+  o.meter = meters[meters.length - 1];
+  o.readout = document.createElement("div");
+  o.readout.className = "readout";
+  mf.append(o.meterCanvas, buildScale(), buildFader(o));
+  el.append(mf, o.readout);
+
+  const sep = document.createElement("div"); sep.className = "sep";
+  const knobs = document.createElement("div");
+  knobs.className = "knobs";
+  knobs.append(makeKnob({ label: "LIM", min: -12, max: 0, value: -1 }));
+  el.append(sep, knobs);
+
+  const ms = document.createElement("div");
+  ms.className = "ms";
+  const mb = document.createElement("button");
+  mb.className = "msbtn m"; mb.textContent = "M";
+  mb.addEventListener("click", () => { o.mute = !o.mute; mb.classList.toggle("active", o.mute); });
+  ms.append(mb);
+  el.append(ms);
+
+  o.renderFader();
+  state.buses.push(o);
+  return el;
+}
+
+const hwRow = document.querySelector("#g-hw .striprow");
+const vRow = document.querySelector("#g-virt .striprow");
+const bRow = document.querySelector("#g-bus .striprow");
+for (const cfg of INPUTS) (cfg.id.startsWith("hw") ? hwRow : vRow).append(buildInputStrip(cfg));
+for (const cfg of BUSES) bRow.append(buildBusStrip(cfg));
+
+/* ---------- animation loop ---------- */
+let last = performance.now();
+function frame(now) {
+  const t = now / 1000, dt = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  const anySolo = state.inputs.some(s => s.solo);
+  const stereoOfs = [0.6, -0.6];
+
+  for (const s of state.inputs) {
+    const raw = simLevel(s.sim, t, dt);
+    const audible = !s.mute && (!anySolo || s.solo);
+    const lvl = audible && s.gain !== -Infinity ? raw + s.gain : -90;
+    s.level = lvl;
+    updateMeterEnv(s.meter, lvl, stereoOfs, dt, now);
+  }
+  for (const b of state.buses) {
+    let p = 0;
+    for (const s of state.inputs) if (s.routes[b.id]) p += pow(s.level);
+    const lvl = !b.mute && b.gain !== -Infinity ? toDb(p) + b.gain : -90;
+    updateMeterEnv(b.meter, lvl, stereoOfs, dt, now);
+  }
+  for (const m of meters) drawMeter(m, now);
+  requestAnimationFrame(frame);
+}
+function updateMeterEnv(m, lvl, ofs, dt, now) {
+  for (let ch = 0; ch < 2; ch++) {
+    const target = lvl <= -85 ? -90 : lvl + ofs[ch] + Math.random() * 1.2;
+    m.peak[ch] = target > m.peak[ch] ? target : Math.max(-90, m.peak[ch] - 40 * dt);
+    const rt = target - 2.5;
+    m.rms[ch] += (rt - m.rms[ch]) * Math.min(1, dt * 12);
+    if (m.peak[ch] > m.hold[ch]) { m.hold[ch] = m.peak[ch]; m.holdT[ch] = now; }
+    else if (now - m.holdT[ch] > 1500) m.hold[ch] = Math.max(-90, m.hold[ch] - 12 * dt);
+    if (m.peak[ch] >= -0.3) m.clip = true;
+  }
+}
+requestAnimationFrame(frame);
+
+/* ---------- variant switching ---------- */
+const ACCENTS = {
+  "1": { accent: "#00CFE8", hi: "#4ADEF0", lo: "#00A5BA", glow: "rgba(0,207,232,0.14)", on: "#051518" },
+  "2": { accent: "#FFB020", hi: "#FFC554", lo: "#D98F0D", glow: "rgba(255,176,32,0.14)", on: "#1A1002" },
+  "3": { accent: "#A8E22E", hi: "#C0F055", lo: "#86BC1B", glow: "rgba(168,226,46,0.14)", on: "#101802" },
+};
+let dense = false;
+window.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") return;
+  const r = document.documentElement.style;
+  if (ACCENTS[e.key]) {
+    const a = ACCENTS[e.key];
+    r.setProperty("--accent", a.accent);
+    r.setProperty("--accent-hi", a.hi);
+    r.setProperty("--accent-lo", a.lo);
+    r.setProperty("--accent-glow", a.glow);
+    r.setProperty("--on-accent", a.on);
+    refreshMeterColors();
+  } else if (e.key === "s" || e.key === "S") {
+    segmented = !segmented;
+  } else if (e.key === "d" || e.key === "D") {
+    dense = !dense;
+    r.setProperty("--strip-w", dense ? "120px" : "112px");
+    r.setProperty("--bus-w", dense ? "104px" : "96px");
+  }
+});
+</script>
+</body>
+</html>

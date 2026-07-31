@@ -1,0 +1,19 @@
+[package]
+name = "linuxmeeter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "VoiceMeeter-style virtual audio mixer for Linux (PipeWire)"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+lm-protocol = { path = "../crates/lm-protocol" }
+lm-engine = { path = "../crates/lm-engine" }
+pipewire = "0.10"
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

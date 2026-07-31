@@ -1,0 +1,32 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "linuxmeeter",
+  "version": "0.1.0",
+  "identifier": "com.stacksloth.linuxmeeter",
+  "build": {
+    "beforeDevCommand": "rm -rf ~/.local/share/com.stacksloth.linuxmeeter/WebKitCache; pnpm dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "linuxmeeter",
+        "width": 1280,
+        "height": 720,
+        "minWidth": 1080,
+        "minHeight": 640,
+        "decorations": false,
+        "transparent": false,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false
+  }
+}

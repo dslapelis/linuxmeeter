@@ -1,0 +1,4 @@
+/* Fonts resolve from the system for now (Inter Variable and JetBrains Mono
+   are in the Arch repos and installed on the dev machine).
+   TODO(M7): bundle woff2 files here with @font-face so packaged builds don't
+   depend on system fonts. */
