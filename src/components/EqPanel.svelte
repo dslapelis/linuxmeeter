@@ -13,9 +13,22 @@
   const H = 180;
   const DB_RANGE = 18; // ±18 dB display
 
+  import { onMount } from "svelte";
+
   let canvas: HTMLCanvasElement;
   let selected = $state(0);
   let dragging = $state(false);
+
+  onMount(() => {
+    // Untangle crossed bands from older sessions: keep kinds in place,
+    // redistribute the frequencies in ascending order.
+    const freqs = strip.eq.bands.map((b) => b.freqHz);
+    const sorted = [...freqs].sort((a, b) => a - b);
+    if (freqs.some((f, i) => f !== sorted[i])) {
+      const bands = strip.eq.bands.map((b, i) => ({ ...b, freqHz: sorted[i]! }));
+      mixer.setEqParams(strip.id, { ...strip.eq, bands });
+    }
+  });
 
   const KIND_LABEL = { low_shelf: "LOW", peak: "PEAK", high_shelf: "HIGH" } as const;
   const GRID_FREQS = [50, 100, 200, 500, 1000, 2000, 5000, 10000];
@@ -157,7 +170,14 @@
   function onpointermove(e: PointerEvent) {
     if (!dragging) return;
     const [mx, my] = canvasPos(e);
-    const freqHz = Math.max(EQ_FMIN, Math.min(EQ_FMAX, xToFreq(mx, W)));
+    // Bands cannot cross: keep each band between its neighbors (small margin)
+    // so LOW/PEAK/PEAK/HIGH always appear left-to-right in chip order.
+    const bands = strip.eq.bands;
+    let lo = selected > 0 ? bands[selected - 1]!.freqHz * 1.1 : EQ_FMIN;
+    let hi = selected < bands.length - 1 ? bands[selected + 1]!.freqHz / 1.1 : EQ_FMAX;
+    lo = Math.max(EQ_FMIN, lo);
+    hi = Math.max(lo, Math.min(EQ_FMAX, hi));
+    const freqHz = Math.max(lo, Math.min(hi, xToFreq(mx, W)));
     const gainDb = Math.max(-DB_RANGE, Math.min(DB_RANGE, dbForY(my)));
     setBand(selected, {
       freqHz: Math.round(freqHz),
