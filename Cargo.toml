@@ -7,6 +7,17 @@ version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
 
+# The engine's meter taps process every audio sample; keep the audio-path
+# crates optimized even in dev builds so debug sessions don't starve audio.
+[profile.dev.package.lm-engine]
+opt-level = 3
+
+[profile.dev.package.pipewire]
+opt-level = 3
+
+[profile.dev.package.libspa]
+opt-level = 3
+
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -28,6 +28,20 @@ export interface LimiterParams {
   releaseMs: number;
 }
 
+export type EqBandKind = "low_shelf" | "peak" | "high_shelf";
+
+export interface EqBand {
+  kind: EqBandKind;
+  freqHz: number;
+  gainDb: number;
+  q: number;
+}
+
+export interface EqParams {
+  enabled: boolean;
+  bands: EqBand[];
+}
+
 export interface StripState {
   id: number;
   kind: StripKind;
@@ -41,6 +55,7 @@ export interface StripState {
   routes: Record<BusId, boolean>;
   gate: GateParams;
   comp: CompParams;
+  eq: EqParams;
 }
 
 export interface BusState {

@@ -3,7 +3,7 @@
  * In a browser (no Tauri runtime) or with VITE_MOCK=1 the mock backend is
  * used, so `pnpm dev` gives a fully animated console for design iteration.
  */
-import type { AppState, BusId, CompParams, GateParams, LimiterParams, MeterFrame } from "./types";
+import type { AppState, BusId, CompParams, EqParams, GateParams, LimiterParams, MeterFrame } from "./types";
 import { mockIpc } from "./mock";
 
 export type Target = { strip: number } | { bus: BusId };
@@ -16,6 +16,7 @@ export interface Ipc {
   setRoute(stripId: number, bus: BusId, on: boolean): Promise<void>;
   setGateParams(stripId: number, params: GateParams): Promise<void>;
   setCompParams(stripId: number, params: CompParams): Promise<void>;
+  setEqParams(stripId: number, params: EqParams): Promise<void>;
   setLimiterParams(bus: BusId, params: LimiterParams): Promise<void>;
   setStripDevice(stripId: number, hwKey: string): Promise<void>;
   setBusTarget(bus: BusId, hwKey: string): Promise<void>;
@@ -46,6 +47,7 @@ function tauriIpc(): Ipc {
     setRoute: (stripId, bus, on) => invoke("set_route", { stripId, bus, on }),
     setGateParams: (stripId, params) => invoke("set_gate_params", { stripId, params }),
     setCompParams: (stripId, params) => invoke("set_comp_params", { stripId, params }),
+    setEqParams: (stripId, params) => invoke("set_eq_params", { stripId, params }),
     setLimiterParams: (bus, params) => invoke("set_limiter_params", { bus, params }),
     setStripDevice: (stripId, hwKey) => invoke("set_strip_device", { stripId, hwKey }),
     setBusTarget: (bus, hwKey) => invoke("set_bus_target", { bus, hwKey }),

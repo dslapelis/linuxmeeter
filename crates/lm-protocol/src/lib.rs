@@ -66,6 +66,55 @@ impl Default for CompParams {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EqBandKind {
+    LowShelf,
+    Peak,
+    HighShelf,
+}
+
+impl EqBandKind {
+    /// LSP para_equalizer `ft_N` filter-type value.
+    pub fn lsp_filter_type(&self) -> f32 {
+        match self {
+            EqBandKind::Peak => 1.0,      // Bell
+            EqBandKind::HighShelf => 3.0, // Hi-shelf
+            EqBandKind::LowShelf => 5.0,  // Lo-shelf
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EqBand {
+    pub kind: EqBandKind,
+    pub freq_hz: f32,
+    pub gain_db: f32,
+    pub q: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EqParams {
+    pub enabled: bool,
+    pub bands: Vec<EqBand>,
+}
+
+impl Default for EqParams {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            bands: vec![
+                EqBand { kind: EqBandKind::LowShelf, freq_hz: 100.0, gain_db: 0.0, q: 0.7 },
+                EqBand { kind: EqBandKind::Peak, freq_hz: 400.0, gain_db: 0.0, q: 1.0 },
+                EqBand { kind: EqBandKind::Peak, freq_hz: 2500.0, gain_db: 0.0, q: 1.0 },
+                EqBand { kind: EqBandKind::HighShelf, freq_hz: 8000.0, gain_db: 0.0, q: 0.7 },
+            ],
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LimiterParams {
@@ -95,6 +144,9 @@ pub struct StripState {
     pub routes: BTreeMap<BusId, bool>,
     pub gate: GateParams,
     pub comp: CompParams,
+    /// `default` so profiles written before the EQ existed still load.
+    #[serde(default)]
+    pub eq: EqParams,
 }
 
 impl StripState {
@@ -198,6 +250,7 @@ pub enum EngineCommand {
     SetRoute { strip: StripId, bus: BusId, on: bool },
     SetGateParams { strip: StripId, params: GateParams },
     SetCompParams { strip: StripId, params: CompParams },
+    SetEqParams { strip: StripId, params: EqParams },
     SetLimiterParams { bus: BusId, params: LimiterParams },
     /// Point a hardware strip at a different capture device (module reload).
     SetStripDevice { strip: StripId, hw_key: String },

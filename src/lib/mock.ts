@@ -39,6 +39,15 @@ function simLevel(s: Sim, t: number, dt: number): number {
   return s.out;
 }
 
+const defaultEq = () => ({
+  enabled: false,
+  bands: [
+    { kind: "low_shelf" as const, freqHz: 100, gainDb: 0, q: 0.7 },
+    { kind: "peak" as const, freqHz: 400, gainDb: 0, q: 1 },
+    { kind: "peak" as const, freqHz: 2500, gainDb: 0, q: 1 },
+    { kind: "high_shelf" as const, freqHz: 8000, gainDb: 0, q: 0.7 },
+  ],
+});
 const defaultGate = () => ({ enabled: false, thresholdDb: -40, attackMs: 20, releaseMs: 100, holdMs: 50 });
 const defaultComp = () => ({ enabled: false, thresholdDb: -18, ratio: 4, attackMs: 20, releaseMs: 100, makeupDb: 0 });
 const defaultLimiter = () => ({ enabled: true, thresholdDb: -1, releaseMs: 50 });
@@ -54,11 +63,11 @@ const state: AppState = {
   profileName: "Default",
   takeDefaultOutput: false,
   strips: [
-    { id: 1, kind: "hardware", label: "Mic", hwKey: "alsa_input.usb-ZOOM_Corporation_UAC-2", online: true, gainDb: -4, mute: false, solo: false, routes: routes(["A2", "B1"]), gate: defaultGate(), comp: defaultComp() },
-    { id: 2, kind: "hardware", label: "Line In", hwKey: "alsa_input.pci-0000_31_00.4.analog-stereo", online: true, gainDb: -12, mute: false, solo: false, routes: routes(["A1"]), gate: defaultGate(), comp: defaultComp() },
-    { id: 3, kind: "virtual", label: "System", hwKey: null, online: true, gainDb: 0, mute: false, solo: false, routes: routes(["A1", "A2"]), gate: defaultGate(), comp: defaultComp() },
-    { id: 4, kind: "virtual", label: "Music", hwKey: null, online: true, gainDb: -3.2, mute: false, solo: false, routes: routes(["A1", "A2", "B1"]), gate: defaultGate(), comp: defaultComp() },
-    { id: 5, kind: "virtual", label: "Chat", hwKey: null, online: true, gainDb: -6, mute: false, solo: false, routes: routes(["A2", "B1"]), gate: defaultGate(), comp: defaultComp() },
+    { id: 1, kind: "hardware", label: "Mic", hwKey: "alsa_input.usb-ZOOM_Corporation_UAC-2", online: true, gainDb: -4, mute: false, solo: false, routes: routes(["A2", "B1"]), gate: defaultGate(), comp: defaultComp(), eq: defaultEq() },
+    { id: 2, kind: "hardware", label: "Line In", hwKey: "alsa_input.pci-0000_31_00.4.analog-stereo", online: true, gainDb: -12, mute: false, solo: false, routes: routes(["A1"]), gate: defaultGate(), comp: defaultComp(), eq: defaultEq() },
+    { id: 3, kind: "virtual", label: "System", hwKey: null, online: true, gainDb: 0, mute: false, solo: false, routes: routes(["A1", "A2"]), gate: defaultGate(), comp: defaultComp(), eq: defaultEq() },
+    { id: 4, kind: "virtual", label: "Music", hwKey: null, online: true, gainDb: -3.2, mute: false, solo: false, routes: routes(["A1", "A2", "B1"]), gate: defaultGate(), comp: defaultComp(), eq: defaultEq() },
+    { id: 5, kind: "virtual", label: "Chat", hwKey: null, online: true, gainDb: -6, mute: false, solo: false, routes: routes(["A2", "B1"]), gate: defaultGate(), comp: defaultComp(), eq: defaultEq() },
   ],
   buses: [
     { id: "A1", label: "Speakers", targetHwKey: "alsa_output.pci-0000_2f_00.1.hdmi-stereo", online: true, gainDb: 0, mute: false, limiter: defaultLimiter() },
@@ -159,6 +168,11 @@ export const mockIpc: Ipc = {
   setCompParams: (stripId, params) => {
     const s = findStrip(stripId);
     if (s) s.comp = { ...params };
+    return Promise.resolve();
+  },
+  setEqParams: (stripId, params) => {
+    const s = findStrip(stripId);
+    if (s) s.eq = structuredClone(params);
     return Promise.resolve();
   },
   setLimiterParams: (bus, params) => {

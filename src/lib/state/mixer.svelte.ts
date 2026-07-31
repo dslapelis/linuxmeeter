@@ -4,7 +4,7 @@
  * backend. Continuous controls (fader drags) throttle IPC to one call per
  * animation frame, with a guaranteed final send.
  */
-import type { AppState, BusId, BusState, CompParams, DeviceInfo, GateParams, LimiterParams, StripState } from "../types";
+import type { AppState, BusId, BusState, CompParams, DeviceInfo, EqParams, GateParams, LimiterParams, StripState } from "../types";
 import { ipc, type Target } from "../ipc";
 import { ingestFrame } from "./meters";
 
@@ -137,6 +137,12 @@ class MixerStore {
     const s = this.strip(stripId);
     if (s) s.comp = params;
     void ipc.setCompParams(stripId, params);
+  }
+
+  setEqParams(stripId: number, params: EqParams): void {
+    const s = this.strip(stripId);
+    if (s) s.eq = params;
+    void ipc.setEqParams(stripId, params);
   }
 
   setLimiterParams(bus: BusId, params: LimiterParams): void {

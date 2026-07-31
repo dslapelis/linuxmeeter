@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { StripState } from "../lib/types";
   import { mixer } from "../lib/state/mixer.svelte";
+  import { ui } from "../lib/state/ui.svelte";
   import StripHeader from "./StripHeader.svelte";
   import Meter from "./Meter.svelte";
   import Scale from "./Scale.svelte";
@@ -71,7 +72,15 @@
       onchange={(v) => mixer.setCompParams(strip.id, { ...strip.comp, thresholdDb: v, enabled: true })}
       onenabledchange={(on) => mixer.setCompParams(strip.id, { ...strip.comp, enabled: on })}
     />
-    <button class="eqbtn" title="EQ (coming in M5)">EQ</button>
+    <button
+      class="eqbtn"
+      class:active={strip.eq.enabled}
+      aria-pressed={strip.eq.enabled}
+      title="Open equalizer"
+      onclick={() => (ui.eqStrip = strip.id)}
+    >
+      EQ
+    </button>
   </div>
 
   <div class="sep"></div>
@@ -133,5 +142,10 @@
   .eqbtn:hover {
     background: var(--bg-4);
     color: var(--text-2);
+  }
+  .eqbtn.active {
+    background: var(--accent-glow);
+    color: var(--accent);
+    border-color: var(--accent);
   }
 </style>

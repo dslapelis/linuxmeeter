@@ -2,13 +2,17 @@
   import { onMount } from "svelte";
   import { IS_TAURI } from "./lib/ipc";
   import { mixer } from "./lib/state/mixer.svelte";
+  import { ui } from "./lib/state/ui.svelte";
   import TopBar from "./components/TopBar.svelte";
   import StripRack from "./components/StripRack.svelte";
   import ResizeEdges from "./components/ResizeEdges.svelte";
+  import EqPanel from "./components/EqPanel.svelte";
 
   onMount(() => {
     void mixer.init();
   });
+
+  let eqStrip = $derived(ui.eqStrip !== null ? mixer.strip(ui.eqStrip) : undefined);
 </script>
 
 <div class="app">
@@ -19,6 +23,9 @@
     <main class="loading">connecting…</main>
   {/if}
 </div>
+{#if eqStrip}
+  <EqPanel strip={eqStrip} />
+{/if}
 {#if IS_TAURI}
   <ResizeEdges />
 {/if}

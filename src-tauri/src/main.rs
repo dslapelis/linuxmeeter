@@ -4,7 +4,8 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use lm_protocol::{
-    AppState, BusId, CompParams, EngineCommand, EngineEvent, GateParams, LimiterParams, StripId, Target,
+    AppState, BusId, CompParams, EngineCommand, EngineEvent, EqParams, GateParams, LimiterParams,
+    StripId, Target,
 };
 use tauri::{Emitter, Manager};
 
@@ -57,6 +58,11 @@ fn set_gate_params(data: tauri::State<AppData>, strip_id: StripId, params: GateP
 #[tauri::command]
 fn set_comp_params(data: tauri::State<AppData>, strip_id: StripId, params: CompParams) -> Result<(), String> {
     send(&data, EngineCommand::SetCompParams { strip: strip_id, params })
+}
+
+#[tauri::command]
+fn set_eq_params(data: tauri::State<AppData>, strip_id: StripId, params: EqParams) -> Result<(), String> {
+    send(&data, EngineCommand::SetEqParams { strip: strip_id, params })
 }
 
 #[tauri::command]
@@ -136,6 +142,7 @@ fn main() {
             set_route,
             set_gate_params,
             set_comp_params,
+            set_eq_params,
             set_limiter_params,
             set_strip_device,
             set_bus_target,

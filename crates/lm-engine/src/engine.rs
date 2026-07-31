@@ -12,8 +12,8 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use lm_protocol::{
-    AppState, BusId, BusState, CompParams, DeviceInfo, EngineCommand, EngineEvent, GateParams,
-    LimiterParams, StripId, StripKind, StripState, Target,
+    AppState, BusId, BusState, CompParams, DeviceInfo, EngineCommand, EngineEvent, EqParams,
+    GateParams, LimiterParams, StripId, StripKind, StripState, Target,
 };
 use pipewire::context::ContextRc;
 use pipewire::core::CoreRc;
@@ -174,6 +174,7 @@ impl Engine {
                 routes: routes(&[BusId::B1]),
                 gate: GateParams::default(),
                 comp: CompParams::default(),
+                eq: EqParams::default(),
             });
             next_id += 1;
         }
@@ -190,6 +191,7 @@ impl Engine {
                 routes: routes(&on),
                 gate: GateParams::default(),
                 comp: CompParams::default(),
+                eq: EqParams::default(),
             });
             next_id += 1;
         }
@@ -388,12 +390,26 @@ impl Engine {
         self.set_props(&bus.in_node(), &params::filter_params(&pairs));
     }
 
+    fn apply_eq(&self, strip: &StripState) {
+        let e = &strip.eq;
+        let mut pairs: Vec<(String, f32)> = vec![("eq:enabled".into(), e.enabled as u32 as f32)];
+        for (i, band) in e.bands.iter().enumerate().take(8) {
+            pairs.push((format!("eq:ft_{i}"), band.kind.lsp_filter_type()));
+            pairs.push((format!("eq:f_{i}"), band.freq_hz.clamp(10.0, 24000.0)));
+            pairs.push((format!("eq:g_{i}"), params::db_to_linear(band.gain_db)));
+            pairs.push((format!("eq:q_{i}"), band.q.clamp(0.0, 100.0)));
+        }
+        let borrowed: Vec<(&str, f32)> = pairs.iter().map(|(k, v)| (k.as_str(), *v)).collect();
+        self.set_props(&strip.control_node(), &params::filter_params(&borrowed));
+    }
+
     /// Push the full parameter set for whichever strip/bus owns `node_name`.
     fn apply_all_for(&self, node_name: &str) {
         if let Some(s) = self.app.strips.iter().find(|s| s.control_node() == node_name) {
             self.apply_gain(Target::Strip { strip: s.id });
             self.apply_gate(s);
             self.apply_comp(s);
+            self.apply_eq(s);
             self.apply_strip_mutes();
         }
         if let Some(b) = self.app.buses.iter().find(|b| b.in_node() == node_name) {
@@ -481,6 +497,15 @@ impl Engine {
                 if let Some(s) = self.app.strips.iter().find(|s| s.id == strip) {
                     self.apply_comp(s);
                 }
+            }
+            EngineCommand::SetEqParams { strip, params } => {
+                if let Some(s) = self.app.strips.iter_mut().find(|s| s.id == strip) {
+                    s.eq = params;
+                }
+                if let Some(s) = self.app.strips.iter().find(|s| s.id == strip) {
+                    self.apply_eq(s);
+                }
+                self.dirty = true;
             }
             EngineCommand::SetLimiterParams { bus, params } => {
                 if let Some(b) = self.app.buses.iter_mut().find(|b| b.id == bus) {
