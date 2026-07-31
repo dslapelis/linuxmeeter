@@ -9,4 +9,5 @@ pub mod filterchain;
 pub mod links;
 pub mod meter;
 pub mod params;
+pub mod persist;
 pub mod registry;

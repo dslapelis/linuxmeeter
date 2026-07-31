@@ -68,13 +68,33 @@ struct Engine {
     default_sink: Option<String>,
     default_source: Option<String>,
     built: bool,
+    dirty: bool,
     seq: u32,
 }
 
 impl Engine {
     fn send_state(&mut self) {
         self.refresh_devices();
+        self.dirty = true;
         let _ = self.evt_tx.send(EngineEvent::State(self.app.clone()));
+    }
+
+    fn save_now(&mut self) {
+        if !self.built {
+            return;
+        }
+        let profile = crate::persist::Profile {
+            take_default_output: self.app.take_default_output,
+            strips: self.app.strips.clone(),
+            buses: self.app.buses.clone(),
+        };
+        if let Err(e) = crate::persist::save_profile(&self.app.profile_name, &profile) {
+            tracing::warn!("profile save failed: {e}");
+        }
+        let _ = crate::persist::save_config(&crate::persist::Config {
+            last_profile: self.app.profile_name.clone(),
+        });
+        self.dirty = false;
     }
 
     fn refresh_devices(&mut self) {
@@ -102,6 +122,23 @@ impl Engine {
 
     fn build_graph(&mut self) {
         if self.built {
+            return;
+        }
+        let profile_name = crate::persist::load_config().last_profile;
+        if let Some(p) = crate::persist::load_profile(&profile_name) {
+            self.app.strips = p.strips;
+            self.app.buses = p.buses;
+            self.app.take_default_output = p.take_default_output;
+            self.app.profile_name = profile_name;
+            for s in &mut self.app.strips {
+                if s.kind == StripKind::Hardware {
+                    s.online = s
+                        .hw_key
+                        .as_deref()
+                        .is_some_and(|k| self.model.nodes.values().any(|n| n.name == k));
+                }
+            }
+            self.finish_build();
             return;
         }
         let default_sink = self
@@ -165,7 +202,11 @@ impl Engine {
         self.app.strips = strips;
         self.app.buses = buses;
         self.app.profile_name = "Default".into();
+        self.finish_build();
+    }
 
+    /// Loads modules, routes, and taps for whatever `self.app` describes.
+    fn finish_build(&mut self) {
         // Load modules.
         for strip in self.app.strips.clone() {
             self.load_strip_module(&strip);
@@ -207,7 +248,11 @@ impl Engine {
 
         self.built = true;
         self.reconcile();
+        if self.app.take_default_output {
+            self.apply_default_output(true);
+        }
         self.send_state();
+        self.save_now(); // ensure the profile file exists from first launch
         tracing::info!("graph built: {} strips, {} buses", self.app.strips.len(), self.app.buses.len());
     }
 
@@ -376,7 +421,9 @@ impl Engine {
                     }
                 }
                 self.apply_gain(target);
-                // No state event: gains stream at rAF rate and the frontend is optimistic.
+                // No state event: gains stream at rAF rate and the frontend is
+                // optimistic. Still mark dirty so the debounced save picks it up.
+                self.dirty = true;
             }
             EngineCommand::SetMute { target, mute } => {
                 match target {
@@ -466,46 +513,50 @@ impl Engine {
                 self.send_state();
             }
             EngineCommand::SetDefaultOutput { on } => {
-                let Some((md, _)) = &self.metadata else {
-                    tracing::warn!("no default metadata bound; cannot set default output");
-                    return;
-                };
-                if on {
-                    let Some(system) = self
-                        .app
-                        .strips
-                        .iter()
-                        .find(|s| s.kind == StripKind::Virtual)
-                        .map(|s| s.node_base())
-                    else {
-                        return;
-                    };
-                    md.set_property(
-                        0,
-                        "default.configured.audio.sink",
-                        Some("Spa:String:JSON"),
-                        Some(&format!("{{\"name\":\"{system}\"}}")),
-                    );
-                    tracing::info!("default output -> {system}");
-                } else {
-                    // Restore the remembered hardware default, or clear so the
-                    // session manager picks the best available device.
-                    match &self.default_sink {
-                        Some(hw) => md.set_property(
-                            0,
-                            "default.configured.audio.sink",
-                            Some("Spa:String:JSON"),
-                            Some(&format!("{{\"name\":\"{hw}\"}}")),
-                        ),
-                        None => md.set_property(0, "default.configured.audio.sink", None, None),
-                    }
-                    tracing::info!("default output restored to {:?}", self.default_sink);
-                }
-                self.app.take_default_output = on;
+                self.apply_default_output(on);
                 self.send_state();
             }
             EngineCommand::Shutdown => unreachable!("handled by caller"),
         }
+    }
+
+    fn apply_default_output(&mut self, on: bool) {
+        let Some((md, _)) = &self.metadata else {
+            tracing::warn!("no default metadata bound; cannot set default output");
+            return;
+        };
+        if on {
+            let Some(system) = self
+                .app
+                .strips
+                .iter()
+                .find(|s| s.kind == StripKind::Virtual)
+                .map(|s| s.node_base())
+            else {
+                return;
+            };
+            md.set_property(
+                0,
+                "default.configured.audio.sink",
+                Some("Spa:String:JSON"),
+                Some(&format!("{{\"name\":\"{system}\"}}")),
+            );
+            tracing::info!("default output -> {system}");
+        } else {
+            // Restore the remembered hardware default, or clear so the
+            // session manager picks the best available device.
+            match &self.default_sink {
+                Some(hw) => md.set_property(
+                    0,
+                    "default.configured.audio.sink",
+                    Some("Spa:String:JSON"),
+                    Some(&format!("{{\"name\":\"{hw}\"}}")),
+                ),
+                None => md.set_property(0, "default.configured.audio.sink", None, None),
+            }
+            tracing::info!("default output restored to {:?}", self.default_sink);
+        }
+        self.app.take_default_output = on;
     }
 
     // ---- metering -----------------------------------------------------------
@@ -563,6 +614,7 @@ fn run(
         default_sink: None,
         default_source: None,
         built: false,
+        dirty: false,
         seq: 0,
     }));
 
@@ -697,6 +749,7 @@ fn run(
         let ml = mainloop.clone();
         cmd_rx.attach(mainloop.loop_(), move |cmd| {
             if matches!(cmd, EngineCommand::Shutdown) {
+                engine.borrow_mut().save_now();
                 ml.quit();
                 return;
             }
@@ -718,6 +771,20 @@ fn run(
     };
     timer
         .update_timer(Some(Duration::from_millis(33)), Some(Duration::from_millis(33)))
+        .into_result()?;
+
+    // Debounced profile auto-save.
+    let save_timer = {
+        let engine = engine.clone();
+        mainloop.loop_().add_timer(move |_| {
+            let mut e = engine.borrow_mut();
+            if e.built && e.dirty {
+                e.save_now();
+            }
+        })
+    };
+    save_timer
+        .update_timer(Some(Duration::from_secs(5)), Some(Duration::from_secs(5)))
         .into_result()?;
 
     tracing::info!("engine running");

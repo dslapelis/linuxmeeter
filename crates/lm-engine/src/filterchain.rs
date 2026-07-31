@@ -77,6 +77,7 @@ pub fn virtual_strip_args(sink_name: &str, label: &str, autoconnect_output: bool
         "node.description": format!("{label} (out)"),
         "media.class": "Stream/Output/Audio",
         "node.virtual": true,
+            "state.restore-props": false,
         "node.dont-reconnect": true,
     });
     if !autoconnect_output {
@@ -106,6 +107,7 @@ pub fn virtual_strip_args(sink_name: &str, label: &str, autoconnect_output: bool
             "media.class": "Audio/Sink",
             "audio.position": [ "FL", "FR" ],
             "node.virtual": true,
+            "state.restore-props": false,
         },
         "playback.props": playback_props,
     })
@@ -141,6 +143,7 @@ pub fn hardware_strip_args(strip_name: &str, label: &str, hw_target: &str) -> St
             "stream.capture.sink": false,
             "node.dont-reconnect": true,
             "node.virtual": true,
+            "state.restore-props": false,
         },
         "playback.props": {
             "node.name": format!("{strip_name}.out"),
@@ -149,6 +152,7 @@ pub fn hardware_strip_args(strip_name: &str, label: &str, hw_target: &str) -> St
             "node.autoconnect": false,
             "node.dont-reconnect": true,
             "node.virtual": true,
+            "state.restore-props": false,
         },
     })
     .to_string()
@@ -167,6 +171,7 @@ pub fn bus_args(bus_name: &str, label: &str, hw_target: Option<&str>) -> String 
             "target.object": target,
             "node.dont-reconnect": true,
             "node.virtual": true,
+            "state.restore-props": false,
         }),
         None => json!({
             "node.name": bus_name,
@@ -174,6 +179,7 @@ pub fn bus_args(bus_name: &str, label: &str, hw_target: Option<&str>) -> String 
             "media.class": "Audio/Source",
             "audio.position": [ "FL", "FR" ],
             "node.virtual": true,
+            "state.restore-props": false,
         }),
     };
     json!({
@@ -193,6 +199,7 @@ pub fn bus_args(bus_name: &str, label: &str, hw_target: Option<&str>) -> String 
             "node.autoconnect": false,
             "node.dont-reconnect": true,
             "node.virtual": true,
+            "state.restore-props": false,
         },
         "playback.props": playback_props,
     })

@@ -10,6 +10,7 @@ pipewire = "0.10"
 libspa = "0.10"
 serde.workspace = true
 serde_json.workspace = true
+toml.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 
