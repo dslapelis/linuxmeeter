@@ -20,6 +20,8 @@ export interface Ipc {
   setStripDevice(stripId: number, hwKey: string): Promise<void>;
   setBusTarget(bus: BusId, hwKey: string): Promise<void>;
   setDefaultOutput(on: boolean): Promise<void>;
+  getAutostart(): Promise<boolean>;
+  setAutostart(on: boolean): Promise<void>;
   /** Subscribe to meter frames; returns unsubscribe. */
   onMeters(cb: (frame: MeterFrame) => void): () => void;
   /** Backend-initiated state changes (device hotplug, external volume change…). */
@@ -48,6 +50,8 @@ function tauriIpc(): Ipc {
     setStripDevice: (stripId, hwKey) => invoke("set_strip_device", { stripId, hwKey }),
     setBusTarget: (bus, hwKey) => invoke("set_bus_target", { bus, hwKey }),
     setDefaultOutput: (on) => invoke("set_default_output", { on }),
+    getAutostart: () => invoke("get_autostart"),
+    setAutostart: (on) => invoke("set_autostart", { on }),
     onMeters: (cb) => {
       const un = event.then((e) => e.listen<MeterFrame>("meters", (ev) => cb(ev.payload)));
       return () => void un.then((f) => f());

@@ -79,6 +79,42 @@ fn set_default_output(data: tauri::State<AppData>, on: bool) -> Result<(), Strin
     send(&data, EngineCommand::SetDefaultOutput { on })
 }
 
+fn autostart_path() -> std::path::PathBuf {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            std::path::PathBuf::from(std::env::var_os("HOME").expect("HOME not set")).join(".config")
+        })
+        .join("autostart/linuxmeeter.desktop")
+}
+
+#[tauri::command]
+fn get_autostart() -> bool {
+    autostart_path().exists()
+}
+
+#[tauri::command]
+fn set_autostart(on: bool) -> Result<(), String> {
+    let path = autostart_path();
+    if on {
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let entry = format!(
+            "[Desktop Entry]\nType=Application\nName=linuxmeeter\nComment=Virtual audio mixer\nExec={} --minimized\nTerminal=false\nX-GNOME-Autostart-enabled=true\n",
+            exe.display()
+        );
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        }
+        std::fs::write(&path, entry).map_err(|e| e.to_string())
+    } else {
+        match std::fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+}
+
 fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -104,6 +140,8 @@ fn main() {
             set_strip_device,
             set_bus_target,
             set_default_output,
+            get_autostart,
+            set_autostart,
         ])
         .setup(move |app| {
             // Pump engine events into the webview.
@@ -125,7 +163,43 @@ fn main() {
                     }
                 })
                 .expect("spawn event pump");
+
+            // Tray: closing the window hides it; the engine (and all virtual
+            // devices) keeps running until Quit.
+            let show = tauri::menu::MenuItem::with_id(app, "show", "Show mixer", true, None::<&str>)?;
+            let quit = tauri::menu::MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let menu = tauri::menu::Menu::with_items(app, &[&show, &quit])?;
+            tauri::tray::TrayIconBuilder::with_id("main")
+                .icon(app.default_window_icon().expect("window icon").clone())
+                .tooltip("linuxmeeter")
+                .menu(&menu)
+                .show_menu_on_left_click(true)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.unminimize();
+                            let _ = w.set_focus();
+                        }
+                    }
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .build(app)?;
+
+            if std::env::args().any(|a| a == "--minimized") {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.hide();
+                }
+            }
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // Close-to-tray: keep the mixer (and its devices) alive.
+                api.prevent_close();
+                let _ = window.hide();
+            }
         })
         .build(tauri::generate_context!())
         .expect("error building linuxmeeter")

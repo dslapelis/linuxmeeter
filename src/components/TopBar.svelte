@@ -1,7 +1,18 @@
 <script lang="ts">
+  import { onMount } from "svelte";
+  import { ipc } from "../lib/ipc";
   import { mixer } from "../lib/state/mixer.svelte";
   import { startDragging, toggleMaximize } from "../lib/window";
   import WindowControls from "./WindowControls.svelte";
+
+  let autostart = $state(false);
+  onMount(async () => {
+    autostart = await ipc.getAutostart();
+  });
+  function toggleAutostart() {
+    autostart = !autostart;
+    void ipc.setAutostart(autostart);
+  }
 
   /** Drag only from non-interactive surface (buttons stop propagation naturally
    *  because we check the event target). */
@@ -36,6 +47,15 @@
       onclick={() => mixer.setDefaultOutput(!mixer.takeDefaultOutput)}
     >
       DEFAULT OUT
+    </button>
+    <button
+      class="toggle"
+      class:active={autostart}
+      aria-pressed={autostart}
+      title="Start linuxmeeter (minimized to tray) at login so virtual devices always exist"
+      onclick={toggleAutostart}
+    >
+      AUTOSTART
     </button>
   </div>
   <button class="iconbtn" title="Settings">

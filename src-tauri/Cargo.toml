@@ -9,7 +9,7 @@ description = "VoiceMeeter-style virtual audio mixer for Linux (PipeWire)"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 lm-protocol = { path = "../crates/lm-protocol" }
 lm-engine = { path = "../crates/lm-engine" }
 pipewire = "0.10"

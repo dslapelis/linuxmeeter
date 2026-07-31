@@ -87,6 +87,8 @@ function findStrip(id: number): StripState | undefined {
   return state.strips.find((s) => s.id === id);
 }
 
+let mockAutostart = false;
+
 const meterSubs = new Set<(f: MeterFrame) => void>();
 const stateSubs = new Set<(s: AppState) => void>();
 let seq = 0;
@@ -176,6 +178,11 @@ export const mockIpc: Ipc = {
   },
   setDefaultOutput: (on) => {
     state.takeDefaultOutput = on;
+    return Promise.resolve();
+  },
+  getAutostart: () => Promise.resolve(mockAutostart),
+  setAutostart: (on) => {
+    mockAutostart = on;
     return Promise.resolve();
   },
   onMeters: (cb) => {
