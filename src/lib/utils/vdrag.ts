@@ -6,8 +6,8 @@
 export interface VDragOptions {
   get(): number;
   set(v: number): void;
-  /** Pixels of travel covering the full 0..1 range. */
-  pixels: number;
+  /** Pixels of travel covering the full 0..1 range (read live per event). */
+  pixels: () => number;
   /** Normalized value applied on double-click. */
   reset(): number;
   /** Normalized step per wheel notch. */
@@ -44,7 +44,7 @@ export function vdrag(el: HTMLElement, opts: VDragOptions): { destroy(): void } 
   const move = (e: PointerEvent) => {
     if (!dragging) return;
     const fine = e.shiftKey ? 0.1 : 1;
-    val = clamp01(val + ((lastY - e.clientY) / opts.pixels) * fine);
+    val = clamp01(val + ((lastY - e.clientY) / opts.pixels()) * fine);
     lastY = e.clientY;
     opts.set(val);
   };

@@ -14,7 +14,6 @@
   const CLIP_H = 4;
   const GAP = 2;
   const W = 10;
-  const H = 200;
 
   let colors = {
     trough: "#0A0B0D",
@@ -44,10 +43,17 @@
   onMount(() => {
     readColors();
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
     const ctx = canvas.getContext("2d", { alpha: false })!;
     const state = getMeter(key);
+
+    // Backing store follows the rendered size (height is flexible).
+    const resize = () => {
+      canvas.width = W * dpr;
+      canvas.height = Math.max(1, Math.round(canvas.clientHeight * dpr));
+    };
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(canvas);
 
     let visible = true;
     const io = new IntersectionObserver((entries) => {
@@ -55,12 +61,12 @@
     });
     io.observe(canvas);
 
-    const barTop = CLIP_H + GAP;
-    const barH = H - barTop;
-    const yFor = (db: number) => barTop + (1 - Math.max(0, Math.min(1, (db + 60) / 60))) * barH;
-
     const draw = () => {
       if (!visible) return;
+      const H = canvas.height / dpr;
+      const barTop = CLIP_H + GAP;
+      const barH = H - barTop;
+      const yFor = (db: number) => barTop + (1 - Math.max(0, Math.min(1, (db + 60) / 60))) * barH;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.fillStyle = colors.trough;
       ctx.fillRect(0, 0, W, H);
@@ -112,6 +118,7 @@
     return () => {
       unregister();
       io.disconnect();
+      ro.disconnect();
     };
   });
 
@@ -126,7 +133,8 @@
 <style>
   canvas {
     width: 10px;
-    height: var(--fader-h);
+    height: 100%;
+    min-height: var(--fader-h);
     display: block;
   }
 </style>

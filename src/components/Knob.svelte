@@ -78,7 +78,7 @@
   use:vdrag={{
     get: () => toT(value),
     set: (v) => onchange(fromT(v)),
-    pixels: 150,
+    pixels: () => 150,
     reset: () => toT(defaultValue),
     wheelStep: 0.025,
   }}

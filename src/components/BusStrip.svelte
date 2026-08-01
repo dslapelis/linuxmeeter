@@ -93,6 +93,9 @@
     justify-content: center;
     gap: 5px;
     padding-top: 8px;
+    /* Extra strip height becomes fader/meter travel, not blank card. */
+    flex: 1;
+    min-height: calc(var(--fader-h) + 8px);
   }
   .knobs {
     display: flex;

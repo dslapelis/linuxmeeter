@@ -10,8 +10,9 @@
   }
   let { value, onchange, onstart, onend }: Props = $props();
 
-  const TRAVEL = 200;
-  let handleTop = $derived((1 - dbToPos(value)) * TRAVEL - 7);
+  /** Travel follows the rendered height so taller windows get longer throw. */
+  let travel = $state(200);
+  let handleTop = $derived((1 - dbToPos(value)) * travel - 7);
 
   function nudge(e: KeyboardEvent) {
     const step = e.shiftKey ? 0.1 : 0.5;
@@ -51,14 +52,15 @@
   aria-valuemin={-72}
   aria-valuemax={12}
   aria-valuenow={value === -Infinity ? -72 : Math.round(value * 10) / 10}
+  bind:clientHeight={travel}
   onkeydown={nudge}
   use:vdrag={{
     get: () => dbToPos(value),
     set: (p) => onchange(posToDb(p)),
-    pixels: TRAVEL,
+    pixels: () => travel,
     reset: () => dbToPos(0),
     wheelStep: 0.5 / 84,
-    jump: (e, el) => 1 - (e.clientY - el.getBoundingClientRect().top) / TRAVEL,
+    jump: (e, el) => 1 - (e.clientY - el.getBoundingClientRect().top) / travel,
     onStart: onstart,
     onEnd: onend,
   }}
@@ -71,7 +73,8 @@
   .fader {
     position: relative;
     width: 34px;
-    height: var(--fader-h);
+    height: 100%;
+    min-height: var(--fader-h);
     cursor: ns-resize;
     touch-action: none;
   }

@@ -2,11 +2,13 @@
   import { dbToPos } from "../lib/utils/db";
 
   const TICKS = [12, 6, 0, -6, -12, -20, -30, -40, -60];
+
+  let h = $state(200);
 </script>
 
-<div class="scale">
+<div class="scale" bind:clientHeight={h}>
   {#each TICKS as db}
-    <div class="tick" class:zero={db === 0} style:top="{(1 - dbToPos(db)) * 200}px">
+    <div class="tick" class:zero={db === 0} style:top="{(1 - dbToPos(db)) * h}px">
       {db === 0 ? "0" : Math.abs(db)}<i></i>
     </div>
   {/each}
@@ -16,7 +18,8 @@
   .scale {
     position: relative;
     width: 23px;
-    height: var(--fader-h);
+    height: 100%;
+    min-height: var(--fader-h);
   }
   .tick {
     position: absolute;
