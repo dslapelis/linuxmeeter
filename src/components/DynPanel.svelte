@@ -97,26 +97,42 @@
     const r = canvas.getBoundingClientRect();
     return [((e.clientX - r.left) / r.width) * CW, ((e.clientY - r.top) / r.height) * CH];
   }
+
+  /** Relative drag: "knee" moves threshold/makeup, "slope" bends the ratio. */
+  let dragMode: "knee" | "slope" = "knee";
+  let dragStart = { x: 0, y: 0, thresholdDb: 0, makeupDb: 0, ratio: 1 };
+
   function onpointerdown(e: PointerEvent) {
     if (e.button !== 0) return;
+    const [mx, my] = canvasPos(e);
+    const c = strip.comp;
+    const kneeDist = Math.hypot(xFor(c.thresholdDb) - mx, yFor(Math.max(DB_MIN, c.thresholdDb + c.makeupDb)) - my);
+    // Near the dot (or left of it): move the knee. On the compressed segment: bend the ratio.
+    dragMode = kneeDist < 14 || mx <= xFor(c.thresholdDb) ? "knee" : "slope";
+    dragStart = { x: mx, y: my, thresholdDb: c.thresholdDb, makeupDb: c.makeupDb, ratio: c.ratio };
     dragging = true;
     canvas.setPointerCapture(e.pointerId);
-    onpointermove(e);
   }
   function onpointermove(e: PointerEvent) {
     if (!dragging) return;
     const [mx, my] = canvasPos(e);
-    // x -> threshold; y offset above the knee -> makeup
-    const thresholdDb = Math.round(Math.max(-60, Math.min(0, DB_MIN + (mx / CW) * -DB_MIN)));
-    const outDb = DB_MIN + ((CH - my) / CH) * -DB_MIN;
-    const makeupDb = Math.round(Math.max(-12, Math.min(24, outDb - thresholdDb)) * 2) / 2;
-    setComp({ thresholdDb, makeupDb });
+    const dx = mx - dragStart.x;
+    const dy = my - dragStart.y;
+    if (dragMode === "knee") {
+      const thresholdDb = Math.round(Math.max(-60, Math.min(0, dragStart.thresholdDb + (dx / CW) * -DB_MIN)));
+      const makeupDb = Math.round(Math.max(-12, Math.min(24, dragStart.makeupDb - (dy / CH) * -DB_MIN)) * 2) / 2;
+      setComp({ thresholdDb, makeupDb });
+    } else {
+      // Drag down = flatter curve = higher ratio (exponential feel).
+      const ratio = Math.max(1, Math.min(20, dragStart.ratio * Math.pow(1.02, dy)));
+      setComp({ ratio: Math.round(ratio * 10) / 10 });
+    }
   }
   function onpointerup() {
     dragging = false;
   }
   function ondblclick() {
-    setComp({ thresholdDb: -18, makeupDb: 0 }, false);
+    setComp({ thresholdDb: -18, makeupDb: 0, ratio: 4 }, false);
   }
 
   const COMP_DEFAULTS = { thresholdDb: -18, ratio: 4, attackMs: 20, releaseMs: 100, makeupDb: 0 };
@@ -176,7 +192,7 @@
           {onpointermove}
           {onpointerup}
           {ondblclick}
-          title="Drag: threshold (x) + makeup (y) · double-click: reset"
+          title="Drag knee: threshold + makeup · drag slope: ratio · double-click: reset"
         ></canvas>
         <div class="knobs">
           <Knob label="THRESH" min={-60} max={0} value={strip.comp.thresholdDb} defaultValue={-18} onchange={(v) => setComp({ thresholdDb: v })} />
