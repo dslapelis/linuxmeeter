@@ -1,13 +1,31 @@
 <script lang="ts">
   import { mixer } from "../lib/state/mixer.svelte";
+  import { setContentSize } from "../lib/window";
   import InputStrip from "./InputStrip.svelte";
   import BusStrip from "./BusStrip.svelte";
 
   let hardware = $derived(mixer.strips.filter((s) => s.kind === "hardware"));
   let virtual = $derived(mixer.strips.filter((s) => s.kind === "virtual"));
+
+  const WINDOW_H = 800;
+  let rack: HTMLElement;
+
+  // The window is non-resizable; fit it to the strip content whenever the
+  // strip/bus population changes.
+  $effect(() => {
+    void mixer.strips.length;
+    void mixer.buses.length;
+    if (!rack) return;
+    requestAnimationFrame(() => {
+      const groups = Array.from(rack.querySelectorAll<HTMLElement>(".group"));
+      if (groups.length === 0) return;
+      const width = groups.reduce((sum, g) => sum + g.offsetWidth, 0) + 16 * (groups.length + 1);
+      void setContentSize(width, WINDOW_H);
+    });
+  });
 </script>
 
-<main class="rack">
+<main class="rack" bind:this={rack}>
   <section class="group">
     <div class="grouplabel">Hardware</div>
     <div class="striprow">
@@ -41,14 +59,10 @@
     flex: 1;
     display: flex;
     align-items: stretch;
-    /* Spare width distributes between the groups instead of pooling into one
-       void before the buses; 16px is the minimum gap when space is tight. */
-    justify-content: space-between;
     gap: 16px;
     padding: 16px;
     background: var(--bg-1);
-    overflow-x: auto;
-    overflow-y: auto;
+    overflow: hidden;
   }
   .group {
     display: flex;
@@ -70,13 +84,5 @@
     align-items: stretch;
     gap: 8px;
     flex: 1;
-  }
-  .busgroup {
-    position: sticky;
-    right: 16px;
-    background: var(--bg-1);
-    padding-left: 16px;
-    border-left: 1px solid var(--border-0);
-    box-shadow: -16px 0 24px rgba(10, 11, 13, 0.55);
   }
 </style>

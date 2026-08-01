@@ -140,9 +140,9 @@
   }
   .knobs {
     display: flex;
-    justify-content: center;
+    justify-content: space-between;
     align-items: flex-start;
-    gap: 8px;
+    padding: 0 2px;
   }
   .panelbtns {
     display: flex;

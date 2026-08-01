@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { ipc } from "../lib/ipc";
   import { mixer } from "../lib/state/mixer.svelte";
-  import { startDragging, toggleMaximize } from "../lib/window";
+  import { startDragging } from "../lib/window";
   import WindowControls from "./WindowControls.svelte";
 
   let autostart = $state(false);
@@ -22,15 +22,10 @@
     if (el.closest("button, input, [data-no-drag]")) return;
     void startDragging();
   }
-  function ondblclick(e: MouseEvent) {
-    const el = e.target as HTMLElement;
-    if (el.closest("button, input, [data-no-drag]")) return;
-    void toggleMaximize();
-  }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -- window-drag surface, not a semantic control -->
-<header class="topbar" {onpointerdown} {ondblclick}>
+<header class="topbar" {onpointerdown}>
   <div class="wordmark">LINUXMEETER</div>
   <div class="center">
     <button class="chip" title="Profile">

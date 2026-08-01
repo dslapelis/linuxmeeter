@@ -13,13 +13,11 @@
     "windows": [
       {
         "title": "linuxmeeter",
-        "width": 1280,
-        "height": 720,
-        "minWidth": 1080,
-        "minHeight": 640,
+        "width": 1136,
+        "height": 800,
         "decorations": false,
         "transparent": false,
-        "resizable": true
+        "resizable": false
       }
     ],
     "security": {

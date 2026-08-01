@@ -34,7 +34,7 @@
   --focus-ring:  var(--accent);
 
   /* ---- layout ---- */
-  --strip-w: 112px;
+  --strip-w: 128px;
   --bus-w: 96px;
   --fader-h: 200px;
   --topbar-h: 40px;
