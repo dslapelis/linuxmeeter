@@ -499,6 +499,11 @@ impl Engine {
                 }
             }
             EngineCommand::SetEqParams { strip, params } => {
+                tracing::debug!(
+                    "SetEqParams strip={strip} enabled={} gains={:?}",
+                    params.enabled,
+                    params.bands.iter().map(|b| b.gain_db).collect::<Vec<_>>()
+                );
                 if let Some(s) = self.app.strips.iter_mut().find(|s| s.id == strip) {
                     s.eq = params;
                 }
