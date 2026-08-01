@@ -128,13 +128,33 @@
   }
 </script>
 
-<canvas bind:this={canvas} {onclick} title="Click to clear clip (Alt: clear all)"></canvas>
+<div class="meter">
+  <canvas bind:this={canvas} {onclick} title="Click to clear clip (Alt: clear all)"></canvas>
+</div>
 
 <style>
-  canvas {
+  /* A canvas is a replaced element: its width/height *attributes* are an
+     intrinsic aspect ratio. Since the backing store tracks the rendered height
+     (10 × N), a `height: 100%` canvas resolving that percentage against an
+     indefinite height falls back to the ratio and reports ~N px of min-content
+     — which ratchets the strip taller than the rack on every resize until the
+     bottom rows are clipped. The wrapper owns the layout box and the canvas is
+     taken out of flow, so the backing store can never feed back into layout. */
+  .meter {
+    position: relative;
     width: 10px;
     height: 100%;
     min-height: var(--fader-h);
+    flex: none;
+  }
+  canvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    /* Explicit, not `inset: 0` — insets do not stretch a replaced element,
+       which would leave the canvas at its intrinsic 150px. */
+    width: 100%;
+    height: 100%;
     display: block;
   }
 </style>

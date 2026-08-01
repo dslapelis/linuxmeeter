@@ -205,3 +205,147 @@ pub fn bus_args(bus_name: &str, label: &str, hw_target: Option<&str>) -> String 
     })
     .to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::Value;
+
+    fn parse(args: &str) -> Value {
+        serde_json::from_str(args).expect("module args must be valid JSON")
+    }
+
+    fn every_props_block(v: &Value) -> Vec<&Value> {
+        ["capture.props", "playback.props"].iter().filter_map(|k| v.get(k)).collect()
+    }
+
+    fn all_args() -> Vec<(&'static str, String)> {
+        vec![
+            ("virtual strip", virtual_strip_args("lm.strip.1", "System", false)),
+            ("virtual strip autoconnected", virtual_strip_args("lm.strip.1", "System", true)),
+            ("hardware strip", hardware_strip_args("lm.strip.2", "Mic", "alsa_input.usb-foo")),
+            ("A bus", bus_args("lm.bus.a1", "Speakers", Some("alsa_output.usb-foo"))),
+            ("B bus", bus_args("lm.bus.b1", "Stream Mic", None)),
+        ]
+    }
+
+    /// WirePlumber's restore-stream overwrites volume/mute on node appearance.
+    /// Every node we create must opt out, or the mixer fights the session
+    /// manager on every device change.
+    #[test]
+    fn every_node_opts_out_of_wireplumber_restore() {
+        for (what, args) in all_args() {
+            let v = parse(&args);
+            let blocks = every_props_block(&v);
+            assert_eq!(blocks.len(), 2, "{what}: expected capture + playback props");
+            for props in blocks {
+                assert_eq!(
+                    props.get("state.restore-props"),
+                    Some(&Value::Bool(false)),
+                    "{what}: node {:?} would let WirePlumber restore our volume",
+                    props.get("node.name")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_node_is_marked_virtual() {
+        for (what, args) in all_args() {
+            let v = parse(&args);
+            for props in every_props_block(&v) {
+                assert_eq!(props.get("node.virtual"), Some(&Value::Bool(true)), "{what}");
+            }
+        }
+    }
+
+    /// Node names are the identity the profile, routing matrix, and meter taps
+    /// all key on — they must match the helpers in lm-protocol exactly.
+    #[test]
+    fn virtual_strip_names_sink_and_output() {
+        let v = parse(&virtual_strip_args("lm.strip.3", "Music", false));
+        assert_eq!(v["capture.props"]["node.name"], "lm.strip.3");
+        assert_eq!(v["capture.props"]["media.class"], "Audio/Sink", "apps must be able to play into it");
+        assert_eq!(v["playback.props"]["node.name"], "lm.strip.3.out");
+        assert_eq!(v["playback.props"]["media.class"], "Stream/Output/Audio");
+    }
+
+    #[test]
+    fn hardware_strip_captures_from_its_target() {
+        let v = parse(&hardware_strip_args("lm.strip.1", "Mic", "alsa_input.usb-zoom"));
+        assert_eq!(v["capture.props"]["node.name"], "lm.strip.1.cap");
+        assert_eq!(v["capture.props"]["target.object"], "alsa_input.usb-zoom");
+        assert_eq!(v["capture.props"]["stream.capture.sink"], Value::Bool(false), "capture the source, not its monitor");
+        assert_eq!(v["playback.props"]["node.name"], "lm.strip.1.out");
+    }
+
+    /// The routing matrix owns every link; letting the session manager
+    /// autoconnect strip outputs would duplicate audio paths.
+    #[test]
+    fn strip_outputs_do_not_autoconnect() {
+        for args in [
+            virtual_strip_args("lm.strip.1", "System", false),
+            hardware_strip_args("lm.strip.2", "Mic", "alsa_input.usb-foo"),
+        ] {
+            let v = parse(&args);
+            assert_eq!(v["playback.props"]["node.autoconnect"], Value::Bool(false));
+        }
+    }
+
+    /// The isolation escape hatch used by the spike example.
+    #[test]
+    fn autoconnect_flag_opens_the_output() {
+        let v = parse(&virtual_strip_args("lm.strip.1", "System", true));
+        assert!(v["playback.props"].get("node.autoconnect").is_none());
+    }
+
+    #[test]
+    fn a_bus_plays_to_hardware() {
+        let v = parse(&bus_args("lm.bus.a1", "Speakers", Some("alsa_output.hdmi")));
+        assert_eq!(v["capture.props"]["node.name"], "lm.bus.a1.in");
+        assert_eq!(v["playback.props"]["node.name"], "lm.bus.a1.out");
+        assert_eq!(v["playback.props"]["target.object"], "alsa_output.hdmi");
+    }
+
+    /// B buses are the virtual microphones Discord/OBS select; the node must
+    /// carry the bus name itself, since that is what `tap_node` meters.
+    #[test]
+    fn b_bus_is_a_virtual_microphone() {
+        let v = parse(&bus_args("lm.bus.b1", "Stream Mic", None));
+        assert_eq!(v["playback.props"]["node.name"], "lm.bus.b1");
+        assert_eq!(v["playback.props"]["media.class"], "Audio/Source");
+        assert!(v["playback.props"].get("target.object").is_none());
+    }
+
+    #[test]
+    fn strip_dsp_chain_is_gate_then_comp_then_eq() {
+        let v = parse(&virtual_strip_args("lm.strip.1", "System", false));
+        let names: Vec<&str> = v["filter.graph"]["nodes"]
+            .as_array()
+            .expect("nodes array")
+            .iter()
+            .map(|n| n["name"].as_str().expect("node name"))
+            .collect();
+        assert_eq!(names, ["gate", "comp", "eq"]);
+        // The Props keys the engine writes are "<node>:<port>"; these prefixes
+        // are the contract between filterchain.rs and engine.rs.
+        assert_eq!(v["filter.graph"]["inputs"][0], "gate:in_l");
+        assert_eq!(v["filter.graph"]["outputs"][0], "eq:out_l");
+    }
+
+    #[test]
+    fn bus_dsp_is_a_limiter() {
+        let v = parse(&bus_args("lm.bus.a1", "Speakers", None));
+        assert_eq!(v["filter.graph"]["nodes"][0]["name"], "lim");
+        assert_eq!(v["filter.graph"]["inputs"][0], "lim:in_l");
+    }
+
+    #[test]
+    fn module_args_reject_interior_nul() {
+        // LoadedModule::load builds a CString; a NUL must surface as BadArgs
+        // rather than a panic. (Labels come from user-editable profiles.)
+        let err = CString::new("has\0nul").unwrap_err();
+        let module_err: ModuleError = err.into();
+        assert!(matches!(module_err, ModuleError::BadArgs(_)));
+    }
+}

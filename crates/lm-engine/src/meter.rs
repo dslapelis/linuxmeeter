@@ -125,9 +125,21 @@ impl MeterTap {
             })
             .register()?;
 
-        // F32 (interleaved), native rate/channels.
+        // F32 (interleaved) stereo at whatever rate the graph runs.
+        //
+        // The channel count is declared rather than left open: ports are created
+        // from the requested format, and a tap with no declared channels has no
+        // ports until something negotiates one for it — which, with autoconnect
+        // off, nothing ever does. Declaring stereo is what keeps metering
+        // independent of the session manager. `MeterAccum` tracks two channels
+        // regardless, so this asks for exactly what it can use.
         let mut audio_info = libspa::param::audio::AudioInfoRaw::new();
         audio_info.set_format(libspa::param::audio::AudioFormat::F32LE);
+        audio_info.set_channels(2);
+        let mut position = [0u32; libspa::sys::SPA_AUDIO_MAX_CHANNELS as usize];
+        position[0] = libspa::sys::SPA_AUDIO_CHANNEL_FL;
+        position[1] = libspa::sys::SPA_AUDIO_CHANNEL_FR;
+        audio_info.set_position(position);
         let obj = libspa::pod::Object {
             type_: libspa::utils::SpaTypes::ObjectParamFormat.as_raw(),
             id: libspa::param::ParamType::EnumFormat.as_raw(),
@@ -154,9 +166,152 @@ impl MeterTap {
 }
 
 /// &[u8] -> &[f32] without a bytemuck dependency; truncates any ragged tail.
+///
+/// PipeWire's mapped buffers are page-aligned, so the alignment check below is
+/// never taken in the audio path — but it is one predictable branch, and
+/// without it a misaligned caller would be instant undefined behaviour rather
+/// than a silent meter.
 fn bytemuck_cast(bytes: &[u8]) -> &[f32] {
+    // No panic and no logging: this runs in the realtime process callback,
+    // where a dropped meter frame is the only acceptable failure.
+    if bytes.as_ptr().align_offset(std::mem::align_of::<f32>()) != 0 {
+        return &[];
+    }
     let n = bytes.len() / 4;
-    // SAFETY: f32 has 4-byte alignment; PipeWire buffers are page-aligned, and
-    // we only expose complete f32s.
+    // SAFETY: alignment is checked above and we only expose complete f32s.
     unsafe { std::slice::from_raw_parts(bytes.as_ptr().cast::<f32>(), n) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Accumulate one channel's worth of samples the way the process callback
+    /// does, so the tests exercise the real arithmetic.
+    fn feed(accum: &MeterAccum, ch: usize, samples: &[f32]) {
+        let mut peak = 0f32;
+        let mut sum_sq = 0f64;
+        for s in samples {
+            peak = peak.max(s.abs());
+            sum_sq += (*s as f64) * (*s as f64);
+        }
+        accum.accumulate(ch, peak, sum_sq, samples.len() as u64);
+    }
+
+    fn sine(amplitude: f32, cycles: usize, per_cycle: usize) -> Vec<f32> {
+        (0..cycles * per_cycle)
+            .map(|i| amplitude * (2.0 * std::f32::consts::PI * i as f32 / per_cycle as f32).sin())
+            .collect()
+    }
+
+    #[test]
+    fn silence_reads_as_the_floor() {
+        let accum = MeterAccum::default();
+        assert_eq!(accum.drain(), [SILENT_DB; 4]);
+    }
+
+    #[test]
+    fn full_scale_peak_is_zero_dbfs() {
+        let accum = MeterAccum::default();
+        feed(&accum, 0, &[1.0, -1.0, 0.5]);
+        let [peak_l, _, _, _] = accum.drain();
+        assert!(peak_l.abs() < 0.01, "expected ~0 dBFS, got {peak_l}");
+    }
+
+    /// A sine's RMS is its amplitude / sqrt(2) — 3.01 dB below its peak. This
+    /// is the number the on-screen meter shows, so it has to be right.
+    #[test]
+    fn sine_rms_sits_3_db_below_peak() {
+        let accum = MeterAccum::default();
+        feed(&accum, 0, &sine(1.0, 100, 64));
+        let [peak, _, rms, _] = accum.drain();
+        assert!((peak - 0.0).abs() < 0.1, "peak {peak}");
+        assert!((rms - -3.01).abs() < 0.1, "rms {rms} should be ~-3.01 dBFS");
+    }
+
+    #[test]
+    fn half_amplitude_reads_6_db_down() {
+        let accum = MeterAccum::default();
+        feed(&accum, 0, &sine(0.5, 100, 64));
+        let [peak, _, rms, _] = accum.drain();
+        assert!((peak - -6.02).abs() < 0.1, "peak {peak}");
+        assert!((rms - -9.03).abs() < 0.1, "rms {rms}");
+    }
+
+    #[test]
+    fn channels_are_independent() {
+        let accum = MeterAccum::default();
+        feed(&accum, 0, &[1.0]);
+        feed(&accum, 1, &[0.1]);
+        let [peak_l, peak_r, ..] = accum.drain();
+        assert!(peak_l.abs() < 0.01, "left {peak_l}");
+        assert!((peak_r - -20.0).abs() < 0.1, "right {peak_r}");
+    }
+
+    /// The 30 Hz drain must reset, or a single transient would latch the meter
+    /// at its peak forever.
+    #[test]
+    fn drain_resets_the_accumulator() {
+        let accum = MeterAccum::default();
+        feed(&accum, 0, &[1.0]);
+        assert!(accum.drain()[0].abs() < 0.01);
+        assert_eq!(accum.drain(), [SILENT_DB; 4], "second drain must be silent");
+    }
+
+    /// Several process callbacks land between drains; peak is a max over all
+    /// of them, not just the last.
+    #[test]
+    fn peak_is_the_max_across_callbacks() {
+        let accum = MeterAccum::default();
+        feed(&accum, 0, &[0.1]);
+        feed(&accum, 0, &[1.0]);
+        feed(&accum, 0, &[0.1]);
+        assert!(accum.drain()[0].abs() < 0.01);
+    }
+
+    /// RMS must be energy-weighted across callbacks, not an average of
+    /// averages: a loud burst followed by silence is quieter overall.
+    #[test]
+    fn rms_accumulates_energy_across_callbacks() {
+        let accum = MeterAccum::default();
+        feed(&accum, 0, &vec![1.0; 100]); // full scale
+        feed(&accum, 0, &vec![0.0; 300]); // then silence
+        // mean square = (100 * 1.0) / 400 = 0.25 -> rms 0.5 -> -6.02 dBFS
+        let rms = accum.drain()[2];
+        assert!((rms - -6.02).abs() < 0.1, "rms {rms}");
+    }
+
+    #[test]
+    fn very_quiet_signals_clamp_to_the_floor() {
+        let accum = MeterAccum::default();
+        feed(&accum, 0, &[1e-6]);
+        let [peak, _, rms, _] = accum.drain();
+        assert_eq!(peak, SILENT_DB);
+        assert_eq!(rms, SILENT_DB);
+    }
+
+    #[test]
+    fn ragged_byte_tails_are_truncated_not_misread() {
+        // Build the bytes from f32s so the buffer is genuinely f32-aligned,
+        // the way PipeWire's mapped buffers are.
+        let backing = [1.0f32, 2.0, 3.0];
+        let bytes: &[u8] = unsafe {
+            std::slice::from_raw_parts(backing.as_ptr().cast::<u8>(), std::mem::size_of_val(&backing))
+        };
+        assert_eq!(bytemuck_cast(&bytes[..9]).len(), 2, "a ragged tail is dropped, not misread");
+        assert_eq!(bytemuck_cast(bytes), [1.0, 2.0, 3.0]);
+        assert!(bytemuck_cast(&bytes[..3]).is_empty());
+    }
+
+    /// A misaligned buffer must degrade to an empty frame. Reading f32s
+    /// straight off an unaligned pointer is undefined behaviour, and it aborts
+    /// the process under Rust's runtime checks.
+    #[test]
+    fn misaligned_buffer_yields_no_samples_instead_of_ub() {
+        let backing = [0.0f32; 4];
+        let bytes: &[u8] = unsafe {
+            std::slice::from_raw_parts(backing.as_ptr().cast::<u8>(), std::mem::size_of_val(&backing))
+        };
+        assert!(bytemuck_cast(&bytes[1..]).is_empty());
+    }
 }

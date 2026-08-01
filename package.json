@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
     "tauri": "tauri"
   },
   "dependencies": {
@@ -19,6 +20,7 @@
     "svelte": "^5.46.4",
     "svelte-check": "^4.3.6",
     "typescript": "^5.9.3",
-    "vite": "^7.2.9"
+    "vite": "^7.2.9",
+    "vitest": "^4.1.10"
   }
 }
