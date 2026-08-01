@@ -79,6 +79,11 @@ fn sanitize(p: &mut Profile) {
         s.solo = false;
         // `online` is recomputed against the live registry at build time.
         s.online = s.kind == StripKind::Virtual;
+        // Migrate pre-color-pad profiles (4 bands) to 8 bands.
+        while s.eq.bands.len() < 8 {
+            let i = s.eq.bands.len() - 4;
+            s.eq.bands.push(lm_protocol::EqParams::color_defaults()[i.min(3)]);
+        }
     }
     for b in &mut p.buses {
         b.online = true;

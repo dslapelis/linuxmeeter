@@ -101,17 +101,29 @@ pub struct EqParams {
     pub bands: Vec<EqBand>,
 }
 
+impl EqParams {
+    /// Bands 4..8 are reserved for the voice-color pad (voice-tuned corners),
+    /// independent of the four user-facing EQ-panel bands.
+    pub fn color_defaults() -> [EqBand; 4] {
+        [
+            EqBand { kind: EqBandKind::LowShelf, freq_hz: 300.0, gain_db: 0.0, q: 0.7 },
+            EqBand { kind: EqBandKind::Peak, freq_hz: 400.0, gain_db: 0.0, q: 0.8 },
+            EqBand { kind: EqBandKind::Peak, freq_hz: 3000.0, gain_db: 0.0, q: 0.8 },
+            EqBand { kind: EqBandKind::HighShelf, freq_hz: 3500.0, gain_db: 0.0, q: 0.7 },
+        ]
+    }
+}
+
 impl Default for EqParams {
     fn default() -> Self {
-        Self {
-            enabled: false,
-            bands: vec![
-                EqBand { kind: EqBandKind::LowShelf, freq_hz: 100.0, gain_db: 0.0, q: 0.7 },
-                EqBand { kind: EqBandKind::Peak, freq_hz: 400.0, gain_db: 0.0, q: 1.0 },
-                EqBand { kind: EqBandKind::Peak, freq_hz: 2500.0, gain_db: 0.0, q: 1.0 },
-                EqBand { kind: EqBandKind::HighShelf, freq_hz: 8000.0, gain_db: 0.0, q: 0.7 },
-            ],
-        }
+        let mut bands = vec![
+            EqBand { kind: EqBandKind::LowShelf, freq_hz: 100.0, gain_db: 0.0, q: 0.7 },
+            EqBand { kind: EqBandKind::Peak, freq_hz: 400.0, gain_db: 0.0, q: 1.0 },
+            EqBand { kind: EqBandKind::Peak, freq_hz: 2500.0, gain_db: 0.0, q: 1.0 },
+            EqBand { kind: EqBandKind::HighShelf, freq_hz: 8000.0, gain_db: 0.0, q: 0.7 },
+        ];
+        bands.extend(Self::color_defaults());
+        Self { enabled: false, bands }
     }
 }
 

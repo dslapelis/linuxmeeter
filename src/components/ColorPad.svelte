@@ -1,7 +1,9 @@
 <script lang="ts">
-  /** VoiceMeeter-style "voice color" XY pad — a view over the strip's EQ:
-   *  X = dark ↔ bright (tilt: low shelf −6x dB, high shelf +6x dB)
-   *  Y = soft ↔ present (2.5 kHz peak +6y dB)
+  /** VoiceMeeter-style "voice color" XY pad. Drives its OWN four EQ bands
+   *  (indices 4..7, voice-tuned corners at 300 Hz / 400 Hz / 3 kHz / 3.5 kHz)
+   *  so it stays strong regardless of how the EQ-panel bands are set:
+   *  X = dark ↔ bright (±10 dB tilt across the voice range)
+   *  Y = warm ↔ present (+10 dB at 3 kHz, with an inverse 400 Hz mud cut)
    *  Center = neutral. Persists as ordinary EQ params.
    */
   import type { StripState } from "../lib/types";
@@ -12,19 +14,21 @@
   }
   let { strip }: Props = $props();
 
-  const TILT_DB = 6;
-  const PRESENCE_DB = 6;
+  const TILT_DB = 10;
+  const PRESENCE_DB = 10;
+  const MUD_DB = 5;
+  const B = { lowTilt: 4, mud: 5, presence: 6, highTilt: 7 } as const;
 
   let pad: HTMLDivElement;
   let dragging = $state(false);
 
   let x = $derived.by(() => {
-    const low = strip.eq.bands[0]?.gainDb ?? 0;
-    const high = strip.eq.bands[3]?.gainDb ?? 0;
+    const low = strip.eq.bands[B.lowTilt]?.gainDb ?? 0;
+    const high = strip.eq.bands[B.highTilt]?.gainDb ?? 0;
     return Math.max(-1, Math.min(1, (high - low) / (2 * TILT_DB)));
   });
   let y = $derived.by(() => {
-    const presence = strip.eq.bands[2]?.gainDb ?? 0;
+    const presence = strip.eq.bands[B.presence]?.gainDb ?? 0;
     return Math.max(-1, Math.min(1, presence / PRESENCE_DB));
   });
   let neutral = $derived(Math.abs(x) < 0.02 && Math.abs(y) < 0.02);
@@ -33,9 +37,10 @@
     nx = Math.max(-1, Math.min(1, nx));
     ny = Math.max(-1, Math.min(1, ny));
     const bands = strip.eq.bands.map((b, i) => {
-      if (i === 0) return { ...b, gainDb: Math.round(-nx * TILT_DB * 10) / 10 };
-      if (i === 3) return { ...b, gainDb: Math.round(nx * TILT_DB * 10) / 10 };
-      if (i === 2) return { ...b, gainDb: Math.round(ny * PRESENCE_DB * 10) / 10 };
+      if (i === B.lowTilt) return { ...b, gainDb: Math.round(-nx * TILT_DB * 10) / 10 };
+      if (i === B.highTilt) return { ...b, gainDb: Math.round(nx * TILT_DB * 10) / 10 };
+      if (i === B.presence) return { ...b, gainDb: Math.round(ny * PRESENCE_DB * 10) / 10 };
+      if (i === B.mud) return { ...b, gainDb: Math.round(-ny * MUD_DB * 10) / 10 };
       return b;
     });
     mixer.setEqParams(strip.id, { ...strip.eq, bands, enabled: true });

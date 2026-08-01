@@ -22,10 +22,10 @@
   onMount(() => {
     // Untangle crossed bands from older sessions: keep kinds in place,
     // redistribute the frequencies in ascending order.
-    const freqs = strip.eq.bands.map((b) => b.freqHz);
+    const freqs = strip.eq.bands.slice(0, 4).map((b) => b.freqHz);
     const sorted = [...freqs].sort((a, b) => a - b);
     if (freqs.some((f, i) => f !== sorted[i])) {
-      const bands = strip.eq.bands.map((b, i) => ({ ...b, freqHz: sorted[i]! }));
+      const bands = strip.eq.bands.map((b, i) => (i < 4 ? { ...b, freqHz: sorted[i]! } : b));
       mixer.setEqParams(strip.id, { ...strip.eq, bands });
     }
   });
@@ -117,7 +117,7 @@
     ctx.fill();
 
     // band handles
-    eq.bands.forEach((b, i) => {
+    eq.bands.slice(0, 4).forEach((b, i) => {
       const x = freqToX(b.freqHz, W);
       const y = yForDb(b.gainDb);
       ctx.beginPath();
@@ -141,7 +141,7 @@
   function bandAt(mx: number, my: number): number | null {
     let best: number | null = null;
     let bestDist = 14;
-    strip.eq.bands.forEach((b, i) => {
+    strip.eq.bands.slice(0, 4).forEach((b, i) => {
       const dx = freqToX(b.freqHz, W) - mx;
       const dy = yForDb(b.gainDb) - my;
       const d = Math.hypot(dx, dy);
@@ -174,7 +174,7 @@
     // so LOW/PEAK/PEAK/HIGH always appear left-to-right in chip order.
     const bands = strip.eq.bands;
     let lo = selected > 0 ? bands[selected - 1]!.freqHz * 1.1 : EQ_FMIN;
-    let hi = selected < bands.length - 1 ? bands[selected + 1]!.freqHz / 1.1 : EQ_FMAX;
+    let hi = selected < 3 ? bands[selected + 1]!.freqHz / 1.1 : EQ_FMAX;
     lo = Math.max(EQ_FMIN, lo);
     hi = Math.max(lo, Math.min(EQ_FMAX, hi));
     const freqHz = Math.max(lo, Math.min(hi, xToFreq(mx, W)));
@@ -234,6 +234,7 @@
               { kind: "peak", freqHz: 400, gainDb: 0, q: 1 },
               { kind: "peak", freqHz: 2500, gainDb: 0, q: 1 },
               { kind: "high_shelf", freqHz: 8000, gainDb: 0, q: 0.7 },
+              ...strip.eq.bands.slice(4),
             ],
           })}
       >
@@ -260,7 +261,7 @@
     ></canvas>
 
     <div class="bands">
-      {#each strip.eq.bands as b, i}
+      {#each strip.eq.bands.slice(0, 4) as b, i}
         <button class="band" class:sel={i === selected} onclick={() => (selected = i)}>
           <span class="kind">{KIND_LABEL[b.kind]}</span>
           <span class="vals">{fmtFreq(b.freqHz)}Hz {b.gainDb > 0 ? "+" : ""}{b.gainDb.toFixed(1)}dB Q{b.q.toFixed(1)}</span>
