@@ -115,6 +115,19 @@
   function onpointerup() {
     dragging = false;
   }
+  function ondblclick() {
+    setComp({ thresholdDb: -18, makeupDb: 0 }, false);
+  }
+
+  const COMP_DEFAULTS = { thresholdDb: -18, ratio: 4, attackMs: 20, releaseMs: 100, makeupDb: 0 };
+  const GATE_DEFAULTS = { thresholdDb: -40, attackMs: 20, releaseMs: 100, holdMs: 50 };
+
+  function resetComp() {
+    mixer.setCompParams(strip.id, { ...strip.comp, ...COMP_DEFAULTS });
+  }
+  function resetGate() {
+    mixer.setGateParams(strip.id, { ...strip.gate, ...GATE_DEFAULTS });
+  }
 
   function close() {
     ui.dynStrip = null;
@@ -142,14 +155,17 @@
     <section>
       <div class="sechead">
         <span class="secname">COMPRESSOR</span>
-        <button
-          class="enbtn"
-          class:active={strip.comp.enabled}
-          aria-pressed={strip.comp.enabled}
-          onclick={() => mixer.setCompParams(strip.id, { ...strip.comp, enabled: !strip.comp.enabled })}
-        >
-          {strip.comp.enabled ? "ON" : "OFF"}
-        </button>
+        <span class="secbtns">
+          <button class="enbtn" title="Reset compressor to defaults" onclick={resetComp}>RESET</button>
+          <button
+            class="enbtn"
+            class:active={strip.comp.enabled}
+            aria-pressed={strip.comp.enabled}
+            onclick={() => mixer.setCompParams(strip.id, { ...strip.comp, enabled: !strip.comp.enabled })}
+          >
+            {strip.comp.enabled ? "ON" : "OFF"}
+          </button>
+        </span>
       </div>
       <div class="comprow">
         <canvas
@@ -159,7 +175,8 @@
           {onpointerdown}
           {onpointermove}
           {onpointerup}
-          title="Drag: threshold (x) + makeup (y)"
+          {ondblclick}
+          title="Drag: threshold (x) + makeup (y) · double-click: reset"
         ></canvas>
         <div class="knobs">
           <Knob label="THRESH" min={-60} max={0} value={strip.comp.thresholdDb} defaultValue={-18} onchange={(v) => setComp({ thresholdDb: v })} />
@@ -176,14 +193,17 @@
     <section>
       <div class="sechead">
         <span class="secname">GATE</span>
-        <button
-          class="enbtn"
-          class:active={strip.gate.enabled}
-          aria-pressed={strip.gate.enabled}
-          onclick={() => mixer.setGateParams(strip.id, { ...strip.gate, enabled: !strip.gate.enabled })}
-        >
-          {strip.gate.enabled ? "ON" : "OFF"}
-        </button>
+        <span class="secbtns">
+          <button class="enbtn" title="Reset gate to defaults" onclick={resetGate}>RESET</button>
+          <button
+            class="enbtn"
+            class:active={strip.gate.enabled}
+            aria-pressed={strip.gate.enabled}
+            onclick={() => mixer.setGateParams(strip.id, { ...strip.gate, enabled: !strip.gate.enabled })}
+          >
+            {strip.gate.enabled ? "ON" : "OFF"}
+          </button>
+        </span>
       </div>
       <div class="knobs gaterow">
         <Knob label="THRESH" min={-70} max={0} value={strip.gate.thresholdDb} defaultValue={-40} onchange={(v) => setGate({ thresholdDb: v })} />
@@ -265,6 +285,10 @@
     font-weight: 600;
     letter-spacing: 0.08em;
     color: var(--text-2);
+  }
+  .secbtns {
+    display: flex;
+    gap: 4px;
   }
   .enbtn {
     height: 20px;

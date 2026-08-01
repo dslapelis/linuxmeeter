@@ -223,6 +223,22 @@
   <div class="panel" role="dialog" aria-label="Equalizer">
     <header>
       <div class="title">EQ <span class="sub">{strip.label}</span></div>
+      <button
+        class="enbtn"
+        title="Reset all bands to defaults"
+        onclick={() =>
+          mixer.setEqParams(strip.id, {
+            ...strip.eq,
+            bands: [
+              { kind: "low_shelf", freqHz: 100, gainDb: 0, q: 0.7 },
+              { kind: "peak", freqHz: 400, gainDb: 0, q: 1 },
+              { kind: "peak", freqHz: 2500, gainDb: 0, q: 1 },
+              { kind: "high_shelf", freqHz: 8000, gainDb: 0, q: 0.7 },
+            ],
+          })}
+      >
+        RESET
+      </button>
       <button class="enbtn" class:active={strip.eq.enabled} aria-pressed={strip.eq.enabled} onclick={toggleEnabled}>
         {strip.eq.enabled ? "ON" : "OFF"}
       </button>
