@@ -16,9 +16,12 @@
 
   let canvas: HTMLCanvasElement;
   let dragging = $state(false);
+  let hover = $state<"knee" | "slope" | null>(null);
 
   const xFor = (db: number) => ((db - DB_MIN) / -DB_MIN) * CW;
   const yFor = (db: number) => CH - ((db - DB_MIN) / -DB_MIN) * CH;
+  const xDb = (x: number) => DB_MIN + (x / CW) * -DB_MIN;
+  const yDb = (y: number) => DB_MIN + ((CH - y) / CH) * -DB_MIN;
 
   function transfer(inDb: number): number {
     const c = strip.comp;
@@ -69,28 +72,49 @@
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // transfer curve
-    ctx.strokeStyle = c.enabled ? col("--accent") : col("--text-3");
+    // transfer curve — slope segment gets a hover/drag highlight
+    const curveCol = c.enabled ? col("--accent") : col("--text-3");
+    const slopeHot = hover === "slope" || (dragging && dragMode === "slope");
     ctx.lineWidth = 2;
+    ctx.strokeStyle = curveCol;
     ctx.beginPath();
-    for (let px = 0; px <= CW; px += 2) {
-      const inDb = DB_MIN + (px / CW) * -DB_MIN;
-      const y = yFor(Math.max(DB_MIN, Math.min(0, transfer(inDb))));
+    for (let px = 0; px <= Math.min(CW, xFor(c.thresholdDb)); px += 2) {
+      const y = yFor(Math.max(DB_MIN, Math.min(0, transfer(xDb(px)))));
       if (px === 0) ctx.moveTo(px, y);
       else ctx.lineTo(px, y);
     }
     ctx.stroke();
+    ctx.lineWidth = slopeHot ? 3.5 : 2;
+    ctx.strokeStyle = slopeHot ? col("--accent-hi") : curveCol;
+    ctx.beginPath();
+    let first = true;
+    for (let px = Math.max(0, Math.floor(xFor(c.thresholdDb))); px <= CW; px += 2) {
+      const y = yFor(Math.max(DB_MIN, Math.min(0, transfer(xDb(px)))));
+      if (first) {
+        ctx.moveTo(px, y);
+        first = false;
+      } else ctx.lineTo(px, y);
+    }
+    ctx.stroke();
 
     // knee point (threshold, threshold+makeup)
+    const kneeHot = hover === "knee" || (dragging && dragMode === "knee");
     const kx = xFor(c.thresholdDb);
     const ky = yFor(Math.max(DB_MIN, Math.min(0, c.thresholdDb + c.makeupDb)));
     ctx.beginPath();
-    ctx.arc(kx, ky, 5, 0, Math.PI * 2);
+    ctx.arc(kx, ky, kneeHot ? 7 : 5, 0, Math.PI * 2);
     ctx.fillStyle = col("--bg-2");
     ctx.fill();
     ctx.lineWidth = 2;
-    ctx.strokeStyle = c.enabled ? col("--accent") : col("--text-2");
+    ctx.strokeStyle = c.enabled ? (kneeHot ? col("--accent-hi") : col("--accent")) : col("--text-2");
     ctx.stroke();
+    if (kneeHot) {
+      ctx.beginPath();
+      ctx.arc(kx, ky, 11, 0, Math.PI * 2);
+      ctx.strokeStyle = col("--accent-glow");
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
   });
 
   function canvasPos(e: PointerEvent): [number, number] {
@@ -98,38 +122,64 @@
     return [((e.clientX - r.left) / r.width) * CW, ((e.clientY - r.top) / r.height) * CH];
   }
 
-  /** Relative drag: "knee" moves threshold/makeup, "slope" bends the ratio. */
+  /** Direct manipulation: the grabbed point of the curve stays under the
+   *  pointer. "knee" carries threshold+makeup (with grab offset so nothing
+   *  jumps); "slope" solves the ratio so the curve passes through the pointer. */
   let dragMode: "knee" | "slope" = "knee";
-  let dragStart = { x: 0, y: 0, thresholdDb: 0, makeupDb: 0, ratio: 1 };
+  let grabOffset = { x: 0, y: 0 };
+
+  function hitTest(mx: number, my: number): "knee" | "slope" | null {
+    const c = strip.comp;
+    const kx = xFor(c.thresholdDb);
+    const ky = yFor(Math.max(DB_MIN, Math.min(0, c.thresholdDb + c.makeupDb)));
+    if (Math.hypot(kx - mx, ky - my) < 14) return "knee";
+    // Near the curve, right of the knee?
+    if (mx > kx + 6) {
+      const curveY = yFor(Math.max(DB_MIN, Math.min(0, transfer(xDb(mx)))));
+      if (Math.abs(curveY - my) < 14) return "slope";
+    }
+    return null;
+  }
 
   function onpointerdown(e: PointerEvent) {
     if (e.button !== 0) return;
     const [mx, my] = canvasPos(e);
+    const mode = hitTest(mx, my);
+    if (!mode) return;
     const c = strip.comp;
-    const kneeDist = Math.hypot(xFor(c.thresholdDb) - mx, yFor(Math.max(DB_MIN, c.thresholdDb + c.makeupDb)) - my);
-    // Near the dot (or left of it): move the knee. On the compressed segment: bend the ratio.
-    dragMode = kneeDist < 14 || mx <= xFor(c.thresholdDb) ? "knee" : "slope";
-    dragStart = { x: mx, y: my, thresholdDb: c.thresholdDb, makeupDb: c.makeupDb, ratio: c.ratio };
+    dragMode = mode;
+    grabOffset = {
+      x: xFor(c.thresholdDb) - mx,
+      y: yFor(Math.max(DB_MIN, Math.min(0, c.thresholdDb + c.makeupDb))) - my,
+    };
     dragging = true;
     canvas.setPointerCapture(e.pointerId);
   }
   function onpointermove(e: PointerEvent) {
-    if (!dragging) return;
     const [mx, my] = canvasPos(e);
-    const dx = mx - dragStart.x;
-    const dy = my - dragStart.y;
+    if (!dragging) {
+      hover = hitTest(mx, my);
+      return;
+    }
+    const c = strip.comp;
     if (dragMode === "knee") {
-      const thresholdDb = Math.round(Math.max(-60, Math.min(0, dragStart.thresholdDb + (dx / CW) * -DB_MIN)));
-      const makeupDb = Math.round(Math.max(-12, Math.min(24, dragStart.makeupDb - (dy / CH) * -DB_MIN)) * 2) / 2;
+      const thresholdDb = Math.round(Math.max(-60, Math.min(0, xDb(mx + grabOffset.x))));
+      const makeupDb = Math.round(Math.max(-12, Math.min(24, yDb(my + grabOffset.y) - thresholdDb)) * 2) / 2;
       setComp({ thresholdDb, makeupDb });
     } else {
-      // Drag down = flatter curve = higher ratio (exponential feel).
-      const ratio = Math.max(1, Math.min(20, dragStart.ratio * Math.pow(1.02, dy)));
+      // Solve ratio so the curve passes through the pointer:
+      // out = T + (in - T)/ratio + makeup  =>  ratio = (in - T) / (out - T - makeup)
+      const inDb = Math.max(c.thresholdDb + 2, xDb(mx));
+      const outAboveKnee = yDb(my) - c.thresholdDb - c.makeupDb;
+      const ratio = Math.max(1, Math.min(20, (inDb - c.thresholdDb) / Math.max(0.15, outAboveKnee)));
       setComp({ ratio: Math.round(ratio * 10) / 10 });
     }
   }
   function onpointerup() {
     dragging = false;
+  }
+  function onpointerleave() {
+    if (!dragging) hover = null;
   }
   function ondblclick() {
     setComp({ thresholdDb: -18, makeupDb: 0, ratio: 4 }, false);
@@ -191,7 +241,9 @@
           {onpointerdown}
           {onpointermove}
           {onpointerup}
+          {onpointerleave}
           {ondblclick}
+          style:cursor={hover === "knee" ? "move" : hover === "slope" ? "ns-resize" : "default"}
           title="Drag knee: threshold + makeup · drag slope: ratio · double-click: reset"
         ></canvas>
         <div class="knobs">
