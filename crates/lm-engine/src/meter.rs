@@ -125,9 +125,21 @@ impl MeterTap {
             })
             .register()?;
 
-        // F32 (interleaved), native rate/channels.
+        // F32 (interleaved) stereo at whatever rate the graph runs.
+        //
+        // The channel count is declared rather than left open: ports are created
+        // from the requested format, and a tap with no declared channels has no
+        // ports until something negotiates one for it — which, with autoconnect
+        // off, nothing ever does. Declaring stereo is what keeps metering
+        // independent of the session manager. `MeterAccum` tracks two channels
+        // regardless, so this asks for exactly what it can use.
         let mut audio_info = libspa::param::audio::AudioInfoRaw::new();
         audio_info.set_format(libspa::param::audio::AudioFormat::F32LE);
+        audio_info.set_channels(2);
+        let mut position = [0u32; libspa::sys::SPA_AUDIO_MAX_CHANNELS as usize];
+        position[0] = libspa::sys::SPA_AUDIO_CHANNEL_FL;
+        position[1] = libspa::sys::SPA_AUDIO_CHANNEL_FR;
+        audio_info.set_position(position);
         let obj = libspa::pod::Object {
             type_: libspa::utils::SpaTypes::ObjectParamFormat.as_raw(),
             id: libspa::param::ParamType::EnumFormat.as_raw(),
@@ -154,9 +166,18 @@ impl MeterTap {
 }
 
 /// &[u8] -> &[f32] without a bytemuck dependency; truncates any ragged tail.
+///
+/// PipeWire's mapped buffers are page-aligned, so the alignment check below is
+/// never taken in the audio path — but it is one predictable branch, and
+/// without it a misaligned caller would be instant undefined behaviour rather
+/// than a silent meter.
 fn bytemuck_cast(bytes: &[u8]) -> &[f32] {
+    // No panic and no logging: this runs in the realtime process callback,
+    // where a dropped meter frame is the only acceptable failure.
+    if bytes.as_ptr().align_offset(std::mem::align_of::<f32>()) != 0 {
+        return &[];
+    }
     let n = bytes.len() / 4;
-    // SAFETY: f32 has 4-byte alignment; PipeWire buffers are page-aligned, and
-    // we only expose complete f32s.
+    // SAFETY: alignment is checked above and we only expose complete f32s.
     unsafe { std::slice::from_raw_parts(bytes.as_ptr().cast::<f32>(), n) }
 }
