@@ -1,11 +1,10 @@
 # Maintainer: Daniel Slapelis <dan@stacksloth.com>
-# NOTE: update `url`/`source` once the repository has a public remote.
 pkgname=linuxmeeter-git
 pkgver=r10
 pkgrel=1
 pkgdesc="VoiceMeeter-style virtual audio mixer for PipeWire (Tauri + Svelte)"
 arch=(x86_64)
-url="https://github.com/CHANGEME/linuxmeeter"
+url="https://github.com/dslapelis/linuxmeeter"
 license=(GPL-3.0-or-later)
 depends=(
   pipewire
