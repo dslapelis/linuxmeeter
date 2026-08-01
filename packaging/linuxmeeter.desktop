@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=linuxmeeter
+GenericName=Virtual Audio Mixer
+Comment=VoiceMeeter-style virtual audio mixer for PipeWire
+Exec=linuxmeeter
+Icon=linuxmeeter
+Terminal=false
+Categories=AudioVideo;Audio;Mixer;
+Keywords=audio;mixer;pipewire;voicemeeter;microphone;stream;
+StartupWMClass=linuxmeeter

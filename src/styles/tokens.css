@@ -39,7 +39,7 @@
   --fader-h: 200px;
   --topbar-h: 40px;
 
-  /* ---- type ---- */
-  --mono: "JetBrainsMono Nerd Font", "JetBrains Mono", ui-monospace, monospace;
+  /* ---- type (bundled via fonts.css) ---- */
+  --mono: "JetBrains Mono", ui-monospace, monospace;
   --ui: "Inter Variable", Inter, system-ui, sans-serif;
 }

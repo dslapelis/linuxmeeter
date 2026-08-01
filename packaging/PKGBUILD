@@ -1,0 +1,48 @@
+# Maintainer: Daniel Slapelis <dan@stacksloth.com>
+# NOTE: update `url`/`source` once the repository has a public remote.
+pkgname=linuxmeeter-git
+pkgver=r10
+pkgrel=1
+pkgdesc="VoiceMeeter-style virtual audio mixer for PipeWire (Tauri + Svelte)"
+arch=(x86_64)
+url="https://github.com/CHANGEME/linuxmeeter"
+license=(GPL-3.0-or-later)
+depends=(
+  pipewire
+  lsp-plugins-lv2
+  webkit2gtk-4.1
+  gtk3
+  libayatana-appindicator
+)
+makedepends=(
+  git
+  rust
+  cargo
+  nodejs
+  pnpm
+  pkgconf
+)
+provides=(linuxmeeter)
+conflicts=(linuxmeeter)
+source=("$pkgname::git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$pkgname"
+  printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+  cd "$pkgname"
+  pnpm install --frozen-lockfile
+  pnpm tauri build --no-bundle
+}
+
+package() {
+  cd "$pkgname"
+  install -Dm755 target/release/linuxmeeter "$pkgdir/usr/bin/linuxmeeter"
+  install -Dm644 packaging/linuxmeeter.desktop "$pkgdir/usr/share/applications/linuxmeeter.desktop"
+  install -Dm644 src-tauri/icons/icon.png "$pkgdir/usr/share/icons/hicolor/512x512/apps/linuxmeeter.png"
+  install -Dm644 src-tauri/icons/128x128.png "$pkgdir/usr/share/icons/hicolor/128x128/apps/linuxmeeter.png"
+  install -Dm644 src-tauri/icons/32x32.png "$pkgdir/usr/share/icons/hicolor/32x32/apps/linuxmeeter.png"
+}

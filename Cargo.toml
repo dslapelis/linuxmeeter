@@ -7,6 +7,12 @@ version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
 
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+
 # The engine's meter taps process every audio sample; keep the audio-path
 # crates optimized even in dev builds so debug sessions don't starve audio.
 [profile.dev.package.lm-engine]
