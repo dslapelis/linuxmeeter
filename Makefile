@@ -5,16 +5,21 @@ PNPM  ?= pnpm
 CARGO ?= cargo
 # Engine logging for `make app`, `make graph`, `make spike`.
 LOG   ?= info
+# Where `install-app` puts the binary, desktop entry and icons. The default is
+# a user-local install that needs no root; for system-wide use
+# `sudo make install-app PREFIX=/usr/local`. Layout matches packaging/PKGBUILD.
+PREFIX  ?= $(HOME)/.local
+DESTDIR ?=
 
 .DEFAULT_GOAL := help
 
 .PHONY: help install dev app check check-ui check-rust fmt fmt-check clippy \
         test test-rust test-ui test-audio test-all \
-        build run graph spike clean clean-cache
+        build install-app uninstall-app run graph spike clean clean-cache
 
 help: ## List targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
-		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[1m%-12s\033[0m %s\n", $$1, $$2}'
+		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[1m%-14s\033[0m %s\n", $$1, $$2}'
 
 install: ## Install frontend dependencies
 	$(PNPM) install
@@ -77,6 +82,32 @@ fmt-check: ## Verify Rust formatting without writing
 
 build: ## Release binary at target/release/linuxmeeter
 	$(PNPM) tauri build --no-bundle
+
+install-app: build ## Install binary + desktop entry + icons into PREFIX (default ~/.local)
+	install -Dm755 target/release/linuxmeeter $(DESTDIR)$(PREFIX)/bin/linuxmeeter
+	install -Dm644 packaging/linuxmeeter.desktop $(DESTDIR)$(PREFIX)/share/applications/linuxmeeter.desktop
+	install -Dm644 src-tauri/icons/icon.png $(DESTDIR)$(PREFIX)/share/icons/hicolor/512x512/apps/linuxmeeter.png
+	install -Dm644 src-tauri/icons/128x128.png $(DESTDIR)$(PREFIX)/share/icons/hicolor/128x128/apps/linuxmeeter.png
+	install -Dm644 src-tauri/icons/32x32.png $(DESTDIR)$(PREFIX)/share/icons/hicolor/32x32/apps/linuxmeeter.png
+	@command -v update-desktop-database >/dev/null 2>&1 \
+		&& update-desktop-database -q "$(DESTDIR)$(PREFIX)/share/applications" || true
+	@command -v gtk-update-icon-cache >/dev/null 2>&1 \
+		&& gtk-update-icon-cache -qtf "$(DESTDIR)$(PREFIX)/share/icons/hicolor" || true
+	@echo "  installed -> $(DESTDIR)$(PREFIX)/bin/linuxmeeter"
+	@case ":$$PATH:" in \
+		*":$(PREFIX)/bin:"*) ;; \
+		*) printf '  \033[1;33mnote\033[0m %s is not on your PATH — add it to your shell rc\n' '$(PREFIX)/bin' ;; \
+	esac
+
+uninstall-app: ## Remove what install-app placed under PREFIX
+	rm -f $(DESTDIR)$(PREFIX)/bin/linuxmeeter
+	rm -f $(DESTDIR)$(PREFIX)/share/applications/linuxmeeter.desktop
+	rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/512x512/apps/linuxmeeter.png
+	rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/128x128/apps/linuxmeeter.png
+	rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/32x32/apps/linuxmeeter.png
+	@command -v update-desktop-database >/dev/null 2>&1 \
+		&& update-desktop-database -q "$(DESTDIR)$(PREFIX)/share/applications" || true
+	@echo "  removed from $(DESTDIR)$(PREFIX)"
 
 # ---- cleaning --------------------------------------------------------------
 
