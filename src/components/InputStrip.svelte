@@ -72,15 +72,26 @@
       onchange={(v) => mixer.setCompParams(strip.id, { ...strip.comp, thresholdDb: v, enabled: true })}
       onenabledchange={(on) => mixer.setCompParams(strip.id, { ...strip.comp, enabled: on })}
     />
-    <button
-      class="eqbtn"
-      class:active={strip.eq.enabled}
-      aria-pressed={strip.eq.enabled}
-      title="Open equalizer"
-      onclick={() => (ui.eqStrip = strip.id)}
-    >
-      EQ
-    </button>
+    <div class="panelbtns">
+      <button
+        class="pbtn"
+        class:active={strip.eq.enabled}
+        aria-pressed={strip.eq.enabled}
+        title="Open equalizer"
+        onclick={() => (ui.eqStrip = strip.id)}
+      >
+        EQ
+      </button>
+      <button
+        class="pbtn"
+        class:active={strip.gate.enabled || strip.comp.enabled}
+        aria-pressed={strip.gate.enabled || strip.comp.enabled}
+        title="Open dynamics (gate + compressor)"
+        onclick={() => (ui.dynStrip = strip.id)}
+      >
+        DYN
+      </button>
+    </div>
   </div>
 
   <div class="sep"></div>
@@ -127,23 +138,28 @@
     align-items: flex-start;
     gap: 8px;
   }
-  .eqbtn {
-    margin-top: 3px;
-    height: 22px;
-    width: 26px;
-    font: 500 10px var(--mono);
-    letter-spacing: 0.06em;
+  .panelbtns {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 1px;
+  }
+  .pbtn {
+    height: 19px;
+    width: 30px;
+    font: 500 9px var(--mono);
+    letter-spacing: 0.05em;
     background: var(--bg-3);
     color: var(--text-3);
     border: 1px solid var(--border-0);
     border-radius: 2px;
     box-shadow: inset 0 1px 0 var(--hl-top);
   }
-  .eqbtn:hover {
+  .pbtn:hover {
     background: var(--bg-4);
     color: var(--text-2);
   }
-  .eqbtn.active {
+  .pbtn.active {
     background: var(--accent-glow);
     color: var(--accent);
     border-color: var(--accent);

@@ -12,6 +12,8 @@
     /** When set, the processor can be bypassed: label click toggles, arc dims when off. */
     enabled?: boolean;
     onenabledchange?: (on: boolean) => void;
+    /** "log" gives musically-even travel for time/ratio ranges (min must be > 0). */
+    taper?: "linear" | "log";
   }
   let {
     label,
@@ -23,15 +25,23 @@
     fmt = (v) => `${v.toFixed(1)} dB`,
     enabled,
     onenabledchange,
+    taper = "linear",
   }: Props = $props();
 
   let bypassed = $derived(enabled === false);
+
+  function toT(v: number): number {
+    return taper === "log" ? Math.log(v / min) / Math.log(max / min) : (v - min) / (max - min);
+  }
+  function fromT(t: number): number {
+    return taper === "log" ? min * Math.pow(max / min, t) : min + (max - min) * t;
+  }
 
   const A0 = -135;
   const SWEEP = 270;
 
   let hovering = $state(false);
-  let t = $derived((value - min) / (max - min));
+  let t = $derived(Math.max(0, Math.min(1, toT(value))));
   let angle = $derived(A0 + SWEEP * t);
 
   function polar(r: number, deg: number): [number, number] {
@@ -59,17 +69,17 @@
   onpointerenter={() => (hovering = true)}
   onpointerleave={() => (hovering = false)}
   onkeydown={(e) => {
-    const step = (e.shiftKey ? 0.002 : 0.02) * (max - min);
-    if (e.key === "ArrowUp") onchange(Math.min(max, value + step));
-    else if (e.key === "ArrowDown") onchange(Math.max(min, value - step));
+    const step = e.shiftKey ? 0.002 : 0.02;
+    if (e.key === "ArrowUp") onchange(fromT(Math.min(1, toT(value) + step)));
+    else if (e.key === "ArrowDown") onchange(fromT(Math.max(0, toT(value) - step)));
     else return;
     e.preventDefault();
   }}
   use:vdrag={{
-    get: () => (value - min) / (max - min),
-    set: (v) => onchange(min + (max - min) * v),
+    get: () => toT(value),
+    set: (v) => onchange(fromT(v)),
     pixels: 150,
-    reset: () => (defaultValue - min) / (max - min),
+    reset: () => toT(defaultValue),
     wheelStep: 0.025,
   }}
 >

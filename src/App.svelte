@@ -7,12 +7,14 @@
   import StripRack from "./components/StripRack.svelte";
   import ResizeEdges from "./components/ResizeEdges.svelte";
   import EqPanel from "./components/EqPanel.svelte";
+  import DynPanel from "./components/DynPanel.svelte";
 
   onMount(() => {
     void mixer.init();
   });
 
   let eqStrip = $derived(ui.eqStrip !== null ? mixer.strip(ui.eqStrip) : undefined);
+  let dynStrip = $derived(ui.dynStrip !== null ? mixer.strip(ui.dynStrip) : undefined);
 </script>
 
 <div class="app">
@@ -25,6 +27,9 @@
 </div>
 {#if eqStrip}
   <EqPanel strip={eqStrip} />
+{/if}
+{#if dynStrip}
+  <DynPanel strip={dynStrip} />
 {/if}
 {#if IS_TAURI}
   <ResizeEdges />
