@@ -117,3 +117,136 @@ fn match_ports<'a>(outs: &[&'a PortInfo], ins: &[&'a PortInfo]) -> Vec<(&'a Port
     }
     pairs
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn port(id: u32, direction: PortDirection, channel: &str) -> PortInfo {
+        PortInfo { id, node_id: 1, direction, channel: channel.into(), name: channel.into() }
+    }
+
+    fn out(id: u32, channel: &str) -> PortInfo {
+        port(id, PortDirection::Out, channel)
+    }
+
+    fn inp(id: u32, channel: &str) -> PortInfo {
+        port(id, PortDirection::In, channel)
+    }
+
+    /// (out port id, in port id) pairs, sorted for stable comparison.
+    fn pairs(outs: &[PortInfo], ins: &[PortInfo]) -> Vec<(u32, u32)> {
+        let o: Vec<&PortInfo> = outs.iter().collect();
+        let i: Vec<&PortInfo> = ins.iter().collect();
+        let mut v: Vec<(u32, u32)> = match_ports(&o, &i).into_iter().map(|(a, b)| (a.id, b.id)).collect();
+        v.sort_unstable();
+        v
+    }
+
+    #[test]
+    fn stereo_pairs_by_channel() {
+        let outs = [out(10, "FL"), out(11, "FR")];
+        let ins = [inp(20, "FL"), inp(21, "FR")];
+        assert_eq!(pairs(&outs, &ins), vec![(10, 20), (11, 21)]);
+    }
+
+    /// Ports do not arrive in channel order; matching must not rely on it.
+    #[test]
+    fn channel_matching_ignores_port_order() {
+        let outs = [out(10, "FR"), out(11, "FL")];
+        let ins = [inp(20, "FL"), inp(21, "FR")];
+        assert_eq!(pairs(&outs, &ins), vec![(10, 21), (11, 20)]);
+    }
+
+    #[test]
+    fn true_mono_source_fans_out_to_every_input() {
+        let outs = [out(10, "MONO")];
+        let ins = [inp(20, "FL"), inp(21, "FR")];
+        assert_eq!(pairs(&outs, &ins), vec![(10, 20), (10, 21)]);
+    }
+
+    /// REGRESSION: a stereo node briefly exposes a single port while its ports
+    /// are still arriving. Fanning that port out would cross-link FL into FR
+    /// and permanently mis-wire the strip. The channel match must win.
+    #[test]
+    fn half_arrived_stereo_output_does_not_fan_out() {
+        let outs = [out(10, "FL")]; // FR has not appeared yet
+        let ins = [inp(20, "FL"), inp(21, "FR")];
+        assert_eq!(
+            pairs(&outs, &ins),
+            vec![(10, 20)],
+            "FL must link only to FL; the missing FR link appears on a later reconcile"
+        );
+    }
+
+    /// A meter tap's stream ports report channel UNK until the format is
+    /// negotiated, while the node it taps already reports FL/FR. No channel
+    /// matches, so the index fallback pairs them in port order — which is
+    /// creation order, which is channel order.
+    #[test]
+    fn unmatched_channels_pair_by_index() {
+        let outs = [out(10, "FL"), out(11, "FR")];
+        let ins = [inp(20, "UNK"), inp(21, "UNK")];
+        assert_eq!(pairs(&outs, &ins), vec![(10, 20), (11, 21)]);
+    }
+
+    /// Index fallback is only safe when the counts agree; guessing otherwise
+    /// would silently mis-map channels.
+    #[test]
+    fn index_fallback_requires_equal_counts() {
+        let outs = [out(10, "FL"), out(11, "FR")];
+        let ins = [inp(20, "UNK"), inp(21, "UNK"), inp(22, "UNK")];
+        assert!(pairs(&outs, &ins).is_empty());
+    }
+
+    /// SHARP EDGE, documented deliberately: when BOTH sides are still
+    /// pre-negotiation, "UNK" compares equal to "UNK", so every output matches
+    /// every input and the index fallback below is never reached — the result
+    /// is a full cross-product, not index pairing.
+    ///
+    /// This heals on the next reconcile once the formats settle (the reconciler
+    /// diffs a full wanted-set and drops the extra links), so it is a transient
+    /// rather than a stuck mis-wiring. It is asserted here so the behaviour
+    /// cannot change silently.
+    #[test]
+    fn both_sides_unknown_cross_links_until_formats_settle() {
+        let outs = [out(10, "UNK"), out(11, "UNK")];
+        let ins = [inp(20, "UNK"), inp(21, "UNK")];
+        assert_eq!(pairs(&outs, &ins), vec![(10, 20), (10, 21), (11, 20), (11, 21)]);
+    }
+
+    #[test]
+    fn no_inputs_yields_no_links() {
+        assert!(pairs(&[out(10, "FL")], &[]).is_empty());
+        assert!(pairs(&[], &[inp(20, "FL")]).is_empty());
+    }
+
+    /// Two strips feeding one bus is the normal mixing case: each strip's FL
+    /// lands on the same bus FL input.
+    #[test]
+    fn many_outputs_may_share_one_input_channel() {
+        let outs = [out(10, "FL")];
+        let ins = [inp(20, "FL")];
+        assert_eq!(pairs(&outs, &ins), vec![(10, 20)]);
+    }
+
+    #[test]
+    fn set_route_toggles_desired_state() {
+        let mut lm = LinkManager::default();
+        lm.set_route("a.out", "b.in", true);
+        assert_eq!(lm.desired().count(), 1);
+        // Re-enabling is idempotent, not additive.
+        lm.set_route("a.out", "b.in", true);
+        assert_eq!(lm.desired().count(), 1);
+        lm.set_route("a.out", "b.in", false);
+        assert_eq!(lm.desired().count(), 0);
+    }
+
+    #[test]
+    fn routes_are_directional() {
+        let mut lm = LinkManager::default();
+        lm.set_route("a.out", "b.in", true);
+        lm.set_route("b.in", "a.out", true);
+        assert_eq!(lm.desired().count(), 2, "reversed pair is a distinct route");
+    }
+}
