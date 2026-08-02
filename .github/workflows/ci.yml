@@ -106,10 +106,16 @@ jobs:
     container:
       image: archlinux:base-devel
     steps:
+      # pipewire-audio is not optional here despite the name: Arch splits the
+      # audio SPA plugins out of the core pipewire package, and without it
+      # `factory=adapter` cannot load its node, so the harness's null sink never
+      # gets created and the daemon exits. lilv is what gives
+      # libpipewire-module-filter-chain its LV2 host, i.e. the LSP plugins.
       - name: Install deps
         run: |
           pacman -Syu --noconfirm --needed \
-            git rust clang nodejs pnpm pipewire lsp-plugins-lv2
+            git rust clang nodejs pnpm \
+            pipewire pipewire-audio lilv lsp-plugins-lv2
 
       - uses: actions/checkout@v4
 
