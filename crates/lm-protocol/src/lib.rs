@@ -272,6 +272,10 @@ pub enum EngineCommand {
     /// style: all desktop audio flows through the mixer), or restore the
     /// previous hardware default.
     SetDefaultOutput { on: bool },
+    /// Start/stop the 30 Hz meter drain. Every frame costs a script evaluation
+    /// in the webview, so a mixer sitting in the tray stops paying for meters
+    /// nobody can see. Audio is unaffected either way.
+    SetMetersEnabled { on: bool },
     Shutdown,
 }
 
@@ -454,6 +458,7 @@ mod tests {
             EngineCommand::SetRoute { strip: 1, bus: BusId::B1, on: true },
             EngineCommand::SetEqParams { strip: 2, params: EqParams::default() },
             EngineCommand::SetDefaultOutput { on: true },
+            EngineCommand::SetMetersEnabled { on: false },
             EngineCommand::Shutdown,
         ];
         for cmd in cmds {

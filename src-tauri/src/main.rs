@@ -85,6 +85,15 @@ fn set_default_output(data: tauri::State<AppData>, on: bool) -> Result<(), Strin
     send(&data, EngineCommand::SetDefaultOutput { on })
 }
 
+/// Start/stop meter frames to follow window visibility. Each frame costs a
+/// script evaluation in the webview plus a canvas repaint per meter, so a
+/// mixer parked in the tray should not be paying for either.
+fn set_meters<R: tauri::Runtime, M: Manager<R>>(manager: &M, on: bool) {
+    if let Some(data) = manager.try_state::<AppData>() {
+        let _ = data.cmd_tx.send(EngineCommand::SetMetersEnabled { on });
+    }
+}
+
 fn autostart_path() -> std::path::PathBuf {
     std::env::var_os("XDG_CONFIG_HOME")
         .map(std::path::PathBuf::from)
@@ -187,6 +196,7 @@ fn main() {
                             let _ = w.show();
                             let _ = w.unminimize();
                             let _ = w.set_focus();
+                            set_meters(app, true);
                         }
                     }
                     "quit" => app.exit(0),
@@ -197,15 +207,18 @@ fn main() {
             if std::env::args().any(|a| a == "--minimized") {
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.hide();
+                    set_meters(app, false);
                 }
             }
             Ok(())
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                // Close-to-tray: keep the mixer (and its devices) alive.
+                // Close-to-tray: keep the mixer (and its devices) alive, but
+                // stop metering — nothing can see it.
                 api.prevent_close();
                 let _ = window.hide();
+                set_meters(window, false);
             }
         })
         .build(tauri::generate_context!())

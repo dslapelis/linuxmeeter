@@ -70,6 +70,8 @@ struct Engine {
     built: bool,
     dirty: bool,
     seq: u32,
+    /// Whether the 30 Hz drain emits. Off while the window is hidden.
+    meters_on: bool,
 }
 
 impl Engine {
@@ -546,6 +548,15 @@ impl Engine {
                 self.apply_default_output(on);
                 self.send_state();
             }
+            EngineCommand::SetMetersEnabled { on } => {
+                // The taps keep accumulating while disabled — peak is a latched
+                // max — so discard whatever piled up rather than opening with a
+                // stale spike from minutes ago.
+                if on && !self.meters_on {
+                    self.meter_frame();
+                }
+                self.meters_on = on;
+            }
             EngineCommand::Shutdown => unreachable!("handled by caller"),
         }
     }
@@ -646,6 +657,7 @@ fn run(
         built: false,
         dirty: false,
         seq: 0,
+        meters_on: true,
     }));
 
     // --- registry events -> model + binding + reconcile ---
@@ -792,7 +804,7 @@ fn run(
         let engine = engine.clone();
         mainloop.loop_().add_timer(move |_| {
             let mut e = engine.borrow_mut();
-            if !e.built {
+            if !e.built || !e.meters_on {
                 return;
             }
             let frame = e.meter_frame();

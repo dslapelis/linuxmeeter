@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import type { MeterKey } from "../lib/types";
-  import { clearAllClips, clearClip, getMeter, registerRenderer } from "../lib/state/meters";
+  import { clearAllClips, clearClip, getMeter, markDirty, registerRenderer } from "../lib/state/meters";
 
   interface Props {
     key: MeterKey;
@@ -47,9 +47,12 @@
     const state = getMeter(key);
 
     // Backing store follows the rendered size (height is flexible).
+    // Resizing the backing store clears it, so the meter owes a repaint even
+    // if its values have not moved.
     const resize = () => {
       canvas.width = W * dpr;
       canvas.height = Math.max(1, Math.round(canvas.clientHeight * dpr));
+      markDirty(key);
     };
     resize();
     const ro = new ResizeObserver(resize);
@@ -57,7 +60,10 @@
 
     let visible = true;
     const io = new IntersectionObserver((entries) => {
-      visible = entries[0]?.isIntersecting ?? true;
+      const now = entries[0]?.isIntersecting ?? true;
+      // Draws are skipped while off-screen, so coming back owes a repaint.
+      if (now && !visible) markDirty(key);
+      visible = now;
     });
     io.observe(canvas);
 
