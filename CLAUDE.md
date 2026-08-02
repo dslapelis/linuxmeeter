@@ -158,6 +158,32 @@ advances ballistics (attack/decay, 1.5 s peak hold, clip latch) and calls each r
 canvas renderer. Keep it that way — routing 30 fps × N strips through runes destroys
 frame time.
 
+**The render loop is idle-driven, and that is load-bearing.** Each meter is its own
+canvas, so every repaint is a Skia GPU pass; drawing all of them unconditionally at
+display refresh cost ~45% of a core by itself. Four rules keep it cheap, and all four
+are needed:
+
+- capped at `MAX_FPS` (30, matching the engine's drain rate — anything faster only
+  interpolates between frames that already arrived);
+- only meters whose displayed values actually moved are redrawn (`MeterState.dirty`);
+- when a tick draws nothing the loop *stops*, and `ingestFrame` / `markDirty` restart it;
+- it does not run while `document.hidden`.
+
+Movement is judged against `EPSILON_DB` (0.1 dB — sub-pixel at the rendered scale), which
+is what stops noise-floor jitter from waking the loop on a silent mixer. The peak and
+peak-hold attacks compare with `>=`, not `>`: with `>` a steady tone decays one frame and
+re-attacks the next, flickering forever and never letting the loop settle.
+
+Anything that clears a canvas outside the loop (backing-store resize, coming back from
+off-screen) owes a `markDirty(key)` — the loop will not repaint it otherwise.
+
+Symmetrically on the backend: `EngineCommand::SetMetersEnabled` gates the 30 Hz drain,
+and `src-tauri/src/main.rs` turns it off whenever the window is hidden. Every emitted
+frame costs a `webkit_web_view_run_javascript` (Tauri emits events by compiling a fresh
+script string), so a mixer parked in the tray should not be producing them. Audio is
+unaffected either way — the taps keep accumulating, which is why re-enabling drains and
+discards first rather than opening on a stale latched peak.
+
 ### Frontend state
 
 `src/lib/ipc.ts` is the **only** file that talks to the backend; everything else imports
