@@ -26,6 +26,14 @@ makedepends=(
 )
 provides=(linuxmeeter)
 conflicts=(linuxmeeter)
+# !lto is required, not a preference. Arch enables LTO globally, which appends
+# -flto=auto to CFLAGS; the cc crate then compiles libspa's C shim to GCC LTO
+# bitcode rather than real objects, and rustc's lld cannot resolve symbols out
+# of that — the build dies on undefined `spa_format_audio_raw_parse_libspa_rs`.
+# Nothing is lost: [profile.release] already sets lto = "thin" for the Rust side.
+# !debug because the release profile strips symbols, so there is no debug
+# package to split out.
+options=(!lto !debug)
 source=("$pkgname::git+$url.git")
 sha256sums=('SKIP')
 
