@@ -1,0 +1,123 @@
+# Unit tests, type checks and the audio integration suite.
+#
+# Split by what each job actually needs to link against: `test` builds only
+# lm-protocol + lm-engine, so it needs PipeWire headers but none of the WebKit
+# stack; `check` compiles src-tauri too and needs the lot. Keeping them apart
+# means a broken engine test reports in ~2 minutes instead of waiting on WebKit.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # libclang is for pipewire-sys' bindgen, not for compiling our own code.
+      - name: Install engine build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libclang-dev libpipewire-0.3-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: test
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Rust unit tests
+        run: make test-rust
+
+      - name: Frontend unit tests
+        run: make test-ui
+
+  check:
+    name: Type check and lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install full build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libclang-dev libpipewire-0.3-dev \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev libssl-dev libsoup-3.0-dev patchelf file
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: check
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # tauri-build resolves frontendDist ("../dist") at compile time and errors
+      # if it is missing, so the frontend must be built before any cargo command
+      # that touches src-tauri.
+      - name: Build frontend
+        run: pnpm build
+
+      - name: svelte-check
+        run: make check-ui
+
+      - name: cargo check
+        run: make check-rust
+
+      - name: clippy
+        run: make clippy CLIPPY_FLAGS="-D warnings"
+
+  audio:
+    name: Audio integration
+    # Arch, not Ubuntu: these tests need libpipewire-module-filter-chain with
+    # working LV2 support plus the LSP plugins, which is exactly the combination
+    # the project targets and Arch ships by default.
+    runs-on: ubuntu-24.04
+    container:
+      image: archlinux:base-devel
+    steps:
+      - name: Install deps
+        run: |
+          pacman -Syu --noconfirm --needed \
+            git rust clang nodejs pnpm pipewire lsp-plugins-lv2
+
+      - uses: actions/checkout@v4
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: audio
+
+      # The harness starts a private daemon on its own socket in a temp runtime
+      # dir, so this touches nothing else in the container.
+      - name: Audio integration tests
+        run: make test-audio

@@ -1,0 +1,94 @@
+# Publish packaging/PKGBUILD to the AUR as linuxmeeter-git.
+#
+# A -git package tracks HEAD, so it does not need republishing for every
+# release: pkgver() re-derives on each user rebuild. What *does* need pushing is
+# a change to the PKGBUILD itself — new dependency, moved install path, changed
+# build step. Hence the triggers below cover both the tag you asked for and the
+# case that actually matters.
+#
+# One-time setup before this can work — see packaging/AUR.md:
+#   1. an AUR account with your SSH public key registered
+#   2. the matching private key stored as the AUR_SSH_PRIVATE_KEY repo secret
+#   3. the aur.archlinux.org/linuxmeeter-git.git repo created by a first manual push
+name: Publish to AUR
+
+on:
+  push:
+    tags: ['v*']
+    branches: [main]
+    paths:
+      - 'packaging/PKGBUILD'
+      - '.github/workflows/aur.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: aur-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: linuxmeeter-git
+    runs-on: ubuntu-24.04
+    container:
+      image: archlinux:base-devel
+    env:
+      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+      PKGNAME: linuxmeeter-git
+    steps:
+      - name: Skip if no deploy key configured
+        if: env.AUR_SSH_PRIVATE_KEY == ''
+        run: |
+          echo "::warning::AUR_SSH_PRIVATE_KEY is not set — nothing to publish."
+          echo "See packaging/AUR.md for the one-time setup."
+
+      - name: Install deps
+        if: env.AUR_SSH_PRIVATE_KEY != ''
+        run: pacman -Syu --noconfirm --needed git openssh
+
+      - uses: actions/checkout@v4
+        if: env.AUR_SSH_PRIVATE_KEY != ''
+
+      - name: Configure SSH
+        if: env.AUR_SSH_PRIVATE_KEY != ''
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan -t ed25519,rsa aur.archlinux.org >> ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<'EOF'
+          Host aur.archlinux.org
+            User aur
+            IdentityFile ~/.ssh/aur
+            IdentitiesOnly yes
+          EOF
+
+      - name: Clone the AUR package repo
+        if: env.AUR_SSH_PRIVATE_KEY != ''
+        run: |
+          git config --global --add safe.directory '*'
+          git clone "ssh://aur@aur.archlinux.org/${PKGNAME}.git" /tmp/aur
+
+      # makepkg refuses to run as root, and --printsrcinfo is the only supported
+      # way to produce a .SRCINFO that matches the PKGBUILD.
+      - name: Regenerate PKGBUILD and .SRCINFO
+        if: env.AUR_SSH_PRIVATE_KEY != ''
+        run: |
+          cp packaging/PKGBUILD /tmp/aur/PKGBUILD
+          useradd -m builder
+          chown -R builder:builder /tmp/aur
+          su builder -c 'cd /tmp/aur && makepkg --printsrcinfo > .SRCINFO'
+          cat /tmp/aur/.SRCINFO
+
+      - name: Commit and push if changed
+        if: env.AUR_SSH_PRIVATE_KEY != ''
+        run: |
+          cd /tmp/aur
+          git config user.name  "Daniel Slapelis"
+          git config user.email "dan@stacksloth.com"
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "AUR package already up to date — nothing to push."
+            exit 0
+          fi
+          git commit -m "Update from ${GITHUB_REF_NAME} (${GITHUB_SHA::7})"
+          git push origin master
