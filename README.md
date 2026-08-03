@@ -5,6 +5,8 @@ A VoiceMeeter-style virtual audio mixer for Linux, built natively on
 channel strips into hardware outputs and virtual microphones that Discord,
 OBS, or any recorder can use.
 
+![linuxmeeter](docs/screenshot.png)
+
 ## Features
 
 - **Input strips** — hardware strips capture real devices (mic, line in);
@@ -14,6 +16,11 @@ OBS, or any recorder can use.
   4-band parametric EQ with an interactive response curve, and a
   VoiceMeeter-style **voice color** XY pad — all powered by the
   [LSP](https://lsp-plug.in) LV2 plugins inside PipeWire filter-chains
+
+  ![EQ panel](docs/screenshot-eq.png)
+
+  ![Dynamics panel](docs/screenshot-dyn.png)
+
 - **Output buses** — A1/A2 to hardware devices, B1/B2 as **virtual
   microphones** (post-limiter) selectable in any app
 - **Routing matrix** — A1/A2/B1/B2 toggles per strip, applied as live
