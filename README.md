@@ -1,5 +1,8 @@
 # linuxmeeter
 
+[![CI](https://github.com/dslapelis/linuxmeeter/actions/workflows/ci.yml/badge.svg)](https://github.com/dslapelis/linuxmeeter/actions/workflows/ci.yml)
+[![Packaging](https://github.com/dslapelis/linuxmeeter/actions/workflows/packaging.yml/badge.svg)](https://github.com/dslapelis/linuxmeeter/actions/workflows/packaging.yml)
+
 A VoiceMeeter-style virtual audio mixer for Linux, built natively on
 **PipeWire**. Route any app or microphone through gated, compressed, EQ'd
 channel strips into hardware outputs and virtual microphones that Discord,

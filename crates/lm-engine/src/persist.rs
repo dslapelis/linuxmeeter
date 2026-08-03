@@ -214,7 +214,7 @@ mod tests {
 
         assert!(back.take_default_output);
         assert_eq!(back.strips[0].gain_db, -13.5);
-        assert_eq!(back.strips[0].routes[&BusId::B1], true);
+        assert!(back.strips[0].routes[&BusId::B1]);
         assert_eq!(back.strips[0].gate.threshold_db, -33.0);
         assert_eq!(back.strips[0].hw_key.as_deref(), Some("alsa_input.usb-foo"));
         assert_eq!(back.buses[0].target_hw_key.as_deref(), Some("alsa_output.hdmi"));

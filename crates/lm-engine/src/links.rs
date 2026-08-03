@@ -100,6 +100,7 @@ impl LinkManager {
 ///   pre-negotiation port order is creation order, which is channel order;
 /// - a *single* output port with no matching input channel (a true mono
 ///   source: MONO/AUX0) fans out to every input port.
+///
 /// Never fans out multi-port outputs — during port arrival a stereo node
 /// briefly has one port, and fanning out then cross-links FL→FR.
 fn match_ports<'a>(outs: &[&'a PortInfo], ins: &[&'a PortInfo]) -> Vec<(&'a PortInfo, &'a PortInfo)> {

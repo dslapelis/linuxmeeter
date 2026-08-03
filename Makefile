@@ -69,8 +69,8 @@ check-ui: ## svelte-check
 check-rust: ## cargo check across the workspace
 	$(CARGO) check --workspace --all-targets
 
-clippy: ## cargo clippy across the workspace
-	$(CARGO) clippy --workspace --all-targets
+clippy: ## cargo clippy across the workspace (CI passes CLIPPY_FLAGS="-D warnings")
+	$(CARGO) clippy --workspace --all-targets $(if $(CLIPPY_FLAGS),-- $(CLIPPY_FLAGS),)
 
 fmt: ## Format Rust sources
 	$(CARGO) fmt --all

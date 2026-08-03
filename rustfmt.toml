@@ -1,0 +1,13 @@
+# This workspace is hand-formatted and CI does NOT gate on `cargo fmt --check`.
+#
+# Default rustfmt costs 634 lines of churn here and degrades the parts that were
+# formatted deliberately: the DSP default tables (GateParams::default,
+# EqParams::color_defaults) and the one-line-per-variant EngineCommand table.
+# These settings cut that to ~114 lines, so they are worth having if you do run
+# `make fmt` — but it is still not a no-op, so don't run it casually.
+#
+# The EngineCommand explosion in particular is not fixable by configuration:
+# once any variant in an enum carries a doc comment, rustfmt formats every
+# struct variant vertically regardless of struct_variant_width.
+max_width = 110
+use_small_heuristics = "Max"

@@ -8,6 +8,7 @@ url="https://github.com/dslapelis/linuxmeeter"
 license=(GPL-3.0-or-later)
 depends=(
   pipewire
+  wireplumber
   lsp-plugins-lv2
   webkit2gtk-4.1
   gtk3
@@ -16,13 +17,23 @@ depends=(
 makedepends=(
   git
   rust
-  cargo
   nodejs
   pnpm
   pkgconf
+  # pipewire-sys/libspa-sys generate their bindings with bindgen, which needs
+  # libclang at build time.
+  clang
 )
 provides=(linuxmeeter)
 conflicts=(linuxmeeter)
+# !lto is required, not a preference. Arch enables LTO globally, which appends
+# -flto=auto to CFLAGS; the cc crate then compiles libspa's C shim to GCC LTO
+# bitcode rather than real objects, and rustc's lld cannot resolve symbols out
+# of that — the build dies on undefined `spa_format_audio_raw_parse_libspa_rs`.
+# Nothing is lost: [profile.release] already sets lto = "thin" for the Rust side.
+# !debug because the release profile strips symbols, so there is no debug
+# package to split out.
+options=(!lto !debug)
 source=("$pkgname::git+$url.git")
 sha256sums=('SKIP')
 
@@ -44,4 +55,5 @@ package() {
   install -Dm644 src-tauri/icons/icon.png "$pkgdir/usr/share/icons/hicolor/512x512/apps/linuxmeeter.png"
   install -Dm644 src-tauri/icons/128x128.png "$pkgdir/usr/share/icons/hicolor/128x128/apps/linuxmeeter.png"
   install -Dm644 src-tauri/icons/32x32.png "$pkgdir/usr/share/icons/hicolor/32x32/apps/linuxmeeter.png"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

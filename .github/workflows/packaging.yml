@@ -1,0 +1,101 @@
+# Build the AUR package for real, in a clean Arch container.
+#
+# The point is to catch PKGBUILD rot that nothing else can: a missing entry in
+# depends=() / makedepends=(), an install path that moved, a build step that
+# only worked because the developer's machine already had something. CI's other
+# jobs build on Ubuntu with deps installed by hand, so they cannot see any of
+# that.
+#
+# Only runs when something that could plausibly break packaging changes, since
+# it is a full release build of both the Rust workspace and the frontend.
+name: Packaging
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packaging/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'src-tauri/tauri.conf.json'
+      - '.github/workflows/packaging.yml'
+  pull_request:
+    paths:
+      - 'packaging/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'src-tauri/tauri.conf.json'
+      - '.github/workflows/packaging.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: packaging-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  makepkg:
+    name: makepkg (linuxmeeter-git)
+    runs-on: ubuntu-24.04
+    container:
+      image: archlinux:base-devel
+    steps:
+      # Deliberately install *only* git/sudo/namcap. Everything else has to come
+      # from the PKGBUILD's own depends=() / makedepends=() via `makepkg -s`, so
+      # a dependency missing from the PKGBUILD fails this job instead of being
+      # silently satisfied by the runner image.
+      - name: Install bootstrap tooling only
+        run: pacman -Syu --noconfirm --needed git sudo namcap
+
+      - uses: actions/checkout@v4
+        with:
+          # pkgver() runs `git rev-list --count HEAD`, which needs real history.
+          fetch-depth: 0
+
+      - name: Prepare build user
+        run: |
+          useradd -m builder
+          # makepkg refuses to run as root, and `-s` needs passwordless pacman
+          # to install the declared dependencies.
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          install -d -o builder -g builder /home/builder/build
+          cp packaging/PKGBUILD /home/builder/build/
+          chown -R builder:builder /home/builder/build
+          chmod -R a+rX "$GITHUB_WORKSPACE"
+
+      # Build the commit under test, not whatever is on GitHub's main branch —
+      # otherwise a PR that breaks packaging would still pass.
+      - name: Point the PKGBUILD at this checkout
+        run: |
+          SHA=$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)
+          sed -i \
+            -e "s|^source=.*|source=(\"\$pkgname::git+file://$GITHUB_WORKSPACE#commit=$SHA\")|" \
+            /home/builder/build/PKGBUILD
+          echo "Building $SHA"
+          grep '^source=' /home/builder/build/PKGBUILD
+
+      - name: makepkg
+        run: |
+          su builder -c '
+            set -euo pipefail
+            cd /home/builder/build
+            git config --global --add safe.directory "*"
+            makepkg --noconfirm --syncdeps --cleanbuild
+          '
+
+      - name: namcap the built package
+        run: |
+          su builder -c 'cd /home/builder/build && namcap ./*.pkg.tar.zst' || true
+
+      - name: Show package contents
+        run: su builder -c 'cd /home/builder/build && bsdtar -tf ./*.pkg.tar.zst'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linuxmeeter-git-pkg
+          path: /home/builder/build/*.pkg.tar.zst
+          if-no-files-found: error
