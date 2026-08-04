@@ -23,6 +23,10 @@ makedepends=(
 )
 provides=(linuxmeeter)
 conflicts=(linuxmeeter)
+# makepkg's default `lto` option puts -flto=auto into CFLAGS; the cc crate then
+# builds libspa's C shim as GCC LTO bitcode, which rust's lld linker cannot read
+# (undefined symbol: spa_format_audio_raw_parse_libspa_rs).
+options=(!lto)
 source=("$pkgname::git+$url.git")
 sha256sums=('SKIP')
 
