@@ -294,7 +294,9 @@
     justify-content: center;
   }
   .panel {
-    width: 420px;
+    width: min(420px, calc(100vw - 24px));
+    max-height: calc(100vh - 24px);
+    overflow: auto;
     background: var(--bg-2);
     border: 1px solid var(--border-1);
     border-radius: 6px;

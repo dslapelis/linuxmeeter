@@ -151,4 +151,20 @@
     background: var(--bg-4);
     color: var(--text-1);
   }
+  @media (max-width: 680px) {
+    .topbar {
+      height: auto;
+      min-height: var(--topbar-h);
+      flex-wrap: wrap;
+      gap: 6px;
+      padding-left: 8px;
+    }
+    .wordmark { flex: 1; font-size: 10px; }
+    .center {
+      order: 3;
+      flex-basis: 100%;
+      justify-content: center;
+      padding-bottom: 6px;
+    }
+  }
 </style>

@@ -17,7 +17,7 @@
         "height": 800,
         "decorations": false,
         "transparent": false,
-        "resizable": false
+        "resizable": true
       }
     ],
     "security": {

@@ -219,8 +219,9 @@ plus on shutdown. `sanitize()` clears state that must not survive a restart (sol
 - **`mockup/index.html` is the living design spec**; `src/styles/tokens.css` is the
   ported single source of truth for color/layout. Accent is amber `#FFB020`. Use the
   tokens, don't hardcode colors.
-- The window is **non-resizable** and self-sizes: `StripRack.svelte` measures its groups
-  and calls `setContentSize` whenever the strip/bus population changes.
+- The window is **resizable** and follows compositor geometry. `StripRack.svelte`
+  reflows channel groups within the available space, stretches faders vertically,
+  and scrolls when needed. Do not force a fixed window size from the UI.
 - Tauri 2 window APIs silently no-op without `src-tauri/capabilities/default.json`
   granting `core:window:allow-*`. Don't remove or trim that file.
 - WebKitGTK caches Vite modules across dev-server restarts and renders the UI unstyled;

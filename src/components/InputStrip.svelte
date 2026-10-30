@@ -110,8 +110,8 @@
 
 <style>
   .strip {
-    width: var(--strip-w);
-    flex: none;
+    min-width: 0;
+    width: 100%;
     background: var(--bg-2);
     border: 1px solid var(--border-0);
     border-radius: 4px;

@@ -15,7 +15,8 @@
   .controls {
     display: flex;
     align-items: center;
-    height: 100%;
+    height: var(--topbar-h);
+    flex: none;
   }
   .winbtn {
     width: 46px;
