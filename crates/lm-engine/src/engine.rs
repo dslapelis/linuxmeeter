@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use lm_protocol::{
     AppState, BusId, BusState, CompParams, DeviceInfo, EngineCommand, EngineEvent, EqParams,
-    GateParams, LimiterParams, StripId, StripKind, StripState, Target,
+    ControlResponse, GateParams, LimiterParams, StripId, StripKind, StripState, Target,
 };
 use pipewire::context::ContextRc;
 use pipewire::core::CoreRc;
@@ -72,6 +72,7 @@ struct Engine {
     seq: u32,
     /// Whether the 30 Hz drain emits. Off while the window is hidden.
     meters_on: bool,
+    state_pending: bool,
 }
 
 impl Engine {
@@ -425,6 +426,23 @@ impl Engine {
 
     fn handle(&mut self, cmd: EngineCommand) {
         match cmd {
+            EngineCommand::Control(request) => {
+                let result = if self.built {
+                    request.command.resolve(&self.app)
+                } else {
+                    Err("engine not ready".into())
+                };
+                let response = match result {
+                    Ok(command) => {
+                        if let Some(command) = command {
+                            self.handle(command);
+                        }
+                        ControlResponse { id: request.id, ok: true, state: Some(self.app.clone()), error: None }
+                    }
+                    Err(error) => ControlResponse { id: request.id, ok: false, state: None, error: Some(error) },
+                };
+                let _ = self.evt_tx.send(EngineEvent::ControlReply(response));
+            }
             EngineCommand::SetGain { target, db } => {
                 match target {
                     Target::Strip { strip } => {
@@ -439,9 +457,10 @@ impl Engine {
                     }
                 }
                 self.apply_gain(target);
-                // No state event: gains stream at rAF rate and the frontend is
-                // optimistic. Still mark dirty so the debounced save picks it up.
+                // Coalesce gain echoes so external controls and the UI agree,
+                // without emitting a full snapshot for every dragged pixel.
                 self.dirty = true;
+                self.state_pending = true;
             }
             EngineCommand::SetMute { target, mute } => {
                 match target {
@@ -658,6 +677,7 @@ fn run(
         dirty: false,
         seq: 0,
         meters_on: true,
+        state_pending: false,
     }));
 
     // --- registry events -> model + binding + reconcile ---
@@ -804,6 +824,10 @@ fn run(
         let engine = engine.clone();
         mainloop.loop_().add_timer(move |_| {
             let mut e = engine.borrow_mut();
+            if e.built && e.state_pending {
+                e.state_pending = false;
+                e.send_state();
+            }
             if !e.built || !e.meters_on {
                 return;
             }

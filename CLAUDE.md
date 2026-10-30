@@ -20,6 +20,7 @@ make dev          # browser-only UI against the MOCK backend (design iteration)
 make app          # full app against the live PipeWire graph
 make test         # Rust + frontend unit tests (no audio system needed)
 make test-audio   # integration tests against a private throwaway PipeWire daemon
+make test-control # local socket/engine tests against the private daemon (Python 3)
 make check        # svelte-check + cargo check --workspace --all-targets
 make build        # release binary -> target/release/linuxmeeter
 make graph        # headless REPL: full topology — `route a1 0|1`, `links`, `meters 1`, `q`
@@ -235,3 +236,21 @@ plus on shutdown. `sanitize()` clears state that must not survive a restart (sol
   hardware default (used for restore) survives while we are the default.
 - Runtime deps that must exist on the machine: PipeWire ≥ 1.0 + WirePlumber,
   `lsp-plugins-lv2`, `webkit2gtk-4.1`, `gtk3`, `libayatana-appindicator`.
+
+## Local control API
+
+`crates/lm-engine/src/control.rs` hosts a user-private Unix socket. The Tauri shell
+owns its lifetime and forwards requests through `EngineCommand::Control`; the
+engine thread resolves relative operations against its authoritative state, then
+returns `EngineEvent::ControlReply` through the shell's event pump. The bridge uses
+internal IDs, so independent clients may reuse request IDs safely. Transport errors
+disable only the API, not the mixer. See `docs/control-api.md`.
+
+Gain writes set `state_pending`; the engine timer coalesces snapshots at 30 Hz.
+Flush that flag before the `meters_on` early return so a hidden GUI does not disable
+control-state updates. Frontend pending-gain acknowledgements protect optimistic
+wheel/keyboard changes from older snapshots, alongside the existing drag guards.
+
+`make test-control` runs the production engine and socket in the private daemon,
+using `control_harness` and a standard-library Python client. Never point these
+tests at the user's PipeWire daemon or profile directory.

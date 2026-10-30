@@ -140,6 +140,15 @@ fn main() {
     let engine = lm_engine::engine::spawn();
     let cmd_tx = engine.cmd_tx.clone();
     let state: Arc<RwLock<Option<AppState>>> = Arc::new(RwLock::new(None));
+    let control = lm_engine::control::ControlBridge::new(engine.cmd_tx.clone());
+    let bridge = control.clone();
+    let control_server = lm_engine::control::socket_path()
+        .and_then(|path| {
+            lm_engine::control::ControlServer::start(path, move |request| bridge.request(request))
+        })
+        .map_err(|e| tracing::warn!("local control unavailable: {e}"))
+        .ok();
+    let pump_control = control.clone();
 
     tauri::Builder::default()
         .manage(AppData { cmd_tx: engine.cmd_tx.clone(), state: state.clone() })
@@ -168,6 +177,7 @@ fn main() {
                 .spawn(move || {
                     while let Ok(evt) = evt_rx.recv() {
                         match evt {
+                            EngineEvent::ControlReply(response) => pump_control.complete(response),
                             EngineEvent::State(s) => {
                                 *state.write().expect("state lock") = Some(s.clone());
                                 let _ = handle.emit("state_changed", &s);
@@ -225,6 +235,10 @@ fn main() {
         .expect("error building linuxmeeter")
         .run(move |_app, event| {
             if let tauri::RunEvent::Exit = event {
+                control.stop();
+                if let Some(server) = &control_server {
+                    server.stop();
+                }
                 // Graceful engine shutdown -> modules unload -> zero lm.* nodes left.
                 let _ = cmd_tx.send(EngineCommand::Shutdown);
                 std::thread::sleep(Duration::from_millis(200));

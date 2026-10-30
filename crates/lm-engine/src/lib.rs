@@ -5,6 +5,7 @@
 //! engine stays testable headless.
 
 pub mod engine;
+pub mod control;
 pub mod filterchain;
 pub mod links;
 pub mod meter;

@@ -3,6 +3,7 @@
 
 PNPM  ?= pnpm
 CARGO ?= cargo
+PYTHON ?= python3
 # Engine logging for `make app`, `make graph`, `make spike`.
 LOG   ?= info
 # Where `install-app` puts the binary, desktop entry and icons. The default is
@@ -14,7 +15,7 @@ DESTDIR ?=
 .DEFAULT_GOAL := help
 
 .PHONY: help install dev app check check-ui check-rust fmt fmt-check clippy \
-        test test-rust test-ui test-audio test-all \
+        test test-rust test-ui test-audio test-control test-all \
         build install-app uninstall-app run graph spike clean clean-cache
 
 help: ## List targets
@@ -57,7 +58,12 @@ test-audio: ## Integration tests against a private throwaway PipeWire daemon
 	./scripts/with-test-daemon.sh \
 		$(CARGO) test -p lm-engine --test audio -- --ignored --test-threads=1
 
-test-all: test test-audio ## Everything, including the audio integration tests
+test-control: ## Local socket/engine integration against a private PipeWire daemon
+	$(CARGO) build -p lm-engine --example control_harness
+	./scripts/with-test-daemon.sh \
+		$(PYTHON) scripts/test-control.py "$$($(CARGO) metadata --no-deps --format-version 1 | $(PYTHON) -c 'import json, sys; print(json.load(sys.stdin)["target_directory"])')/debug/examples/control_harness"
+
+test-all: test test-audio test-control ## Everything, including the audio integration tests
 
 # ---- checks ----------------------------------------------------------------
 

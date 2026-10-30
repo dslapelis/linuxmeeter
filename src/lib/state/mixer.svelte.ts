@@ -7,6 +7,7 @@
 import type { AppState, BusId, BusState, CompParams, DeviceInfo, EqParams, GateParams, LimiterParams, StripState } from "../types";
 import { ipc, type Target } from "../ipc";
 import { ingestFrame } from "./meters";
+import { reconcileGain, type PendingGain } from "../utils/gain-sync";
 
 class MixerStore {
   strips = $state<StripState[]>([]);
@@ -24,6 +25,7 @@ class MixerStore {
   #flushScheduled = false;
   /** Targets with an active drag: incoming backend echoes are ignored for these. */
   #dragging = new Set<string>();
+  #awaitingGain = new Map<string, PendingGain>();
 
   async init(): Promise<void> {
     // The engine builds its PipeWire graph asynchronously at startup; the
@@ -49,6 +51,20 @@ class MixerStore {
   }
 
   #apply(s: AppState, guardDragging = false): void {
+    if (guardDragging) {
+      for (const strip of s.strips) {
+        const key = targetKey({ strip: strip.id });
+        const result = reconcileGain(strip.gainDb, this.#awaitingGain.get(key), Date.now());
+        strip.gainDb = result.value;
+        if (!result.waiting) this.#awaitingGain.delete(key);
+      }
+      for (const bus of s.buses) {
+        const key = targetKey({ bus: bus.id });
+        const result = reconcileGain(bus.gainDb, this.#awaitingGain.get(key), Date.now());
+        bus.gainDb = result.value;
+        if (!result.waiting) this.#awaitingGain.delete(key);
+      }
+    }
     if (guardDragging && this.#dragging.size > 0) {
       // Keep locally-dragged gains; take everything else.
       const held = new Map<string, number>();
@@ -96,6 +112,7 @@ class MixerStore {
   setGain(target: Target, db: number): void {
     const o = this.#find(target);
     if (o) o.gainDb = db;
+    this.#awaitingGain.set(targetKey(target), { db, expires: Date.now() + 2000 });
     this.#pendingGain.set(targetKey(target), { target, db });
     if (!this.#flushScheduled) {
       this.#flushScheduled = true;

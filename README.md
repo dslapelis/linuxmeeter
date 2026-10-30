@@ -61,6 +61,17 @@ Arch users: see `packaging/PKGBUILD`.
 - `cargo run --example graph -p lm-engine` drives the full audio topology
   from a REPL without the UI.
 
+## Local control
+
+Local scripts and hardware controllers can control the running mixer's gain,
+mute, solo and routing over a private Unix socket. No separate audio engine or
+network service is started. See [the control API](docs/control-api.md) for the
+protocol and a Python client example.
+
+```sh
+python3 scripts/control-client.py '{"op":"adjust_gain","target":{"strip":3},"deltaDb":1}'
+```
+
 ## License
 
 GPL-3.0-or-later. Bundled fonts (Inter, JetBrains Mono) are under the SIL

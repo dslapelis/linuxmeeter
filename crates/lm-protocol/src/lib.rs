@@ -247,7 +247,7 @@ pub struct MeterFrame {
 
 /// A strip or a bus, as sent by the frontend: `{"strip": 3}` or `{"bus": "A1"}`.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
+#[serde(untagged, deny_unknown_fields)]
 pub enum Target {
     Strip { strip: StripId },
     Bus { bus: BusId },
@@ -256,6 +256,8 @@ pub enum Target {
 /// Commands into the engine thread.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EngineCommand {
+    /// Local controllers use the same audio-thread state as the mixer UI.
+    Control(ControlRequest),
     SetGain { target: Target, db: f32 },
     SetMute { target: Target, mute: bool },
     SetSolo { strip: StripId, solo: bool },
@@ -282,9 +284,289 @@ pub enum EngineCommand {
 /// Events out of the engine thread.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EngineEvent {
+    ControlReply(ControlResponse),
     /// Full snapshot; sent on startup and after any state-affecting change.
     State(AppState),
     Meters(MeterFrame),
+}
+
+/// Local socket protocol. Relative operations resolve on the engine thread.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ControlRequest {
+    pub id: u64,
+    pub command: ControlCommand,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    tag = "op",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum ControlCommand {
+    GetState {},
+    AdjustGain {
+        target: Target,
+        delta_db: f32,
+    },
+    SetGain {
+        target: Target,
+        db: f32,
+    },
+    ToggleMute {
+        target: Target,
+    },
+    SetMute {
+        target: Target,
+        mute: bool,
+    },
+    ToggleSolo {
+        strip: StripId,
+    },
+    SetSolo {
+        strip: StripId,
+        solo: bool,
+    },
+    ToggleRoute {
+        strip: StripId,
+        bus: BusId,
+    },
+    SetRoute {
+        strip: StripId,
+        bus: BusId,
+        on: bool,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ControlResponse {
+    pub id: u64,
+    pub ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state: Option<AppState>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl ControlCommand {
+    pub fn resolve(&self, state: &AppState) -> Result<Option<EngineCommand>, String> {
+        let strip_state = |id| {
+            state
+                .strips
+                .iter()
+                .find(|s| s.id == id)
+                .ok_or_else(|| format!("unknown strip {id}"))
+        };
+        let target_state = |target: Target| -> Result<(f32, bool), String> {
+            match target {
+                Target::Strip { strip } => strip_state(strip).map(|s| (s.gain_db, s.mute)),
+                Target::Bus { bus } => state
+                    .buses
+                    .iter()
+                    .find(|b| b.id == bus)
+                    .map(|b| (b.gain_db, b.mute))
+                    .ok_or_else(|| format!("unknown bus {bus:?}")),
+            }
+        };
+        let gain = |target: Target, value: f32| -> Result<Option<EngineCommand>, String> {
+            target_state(target)?;
+            if !value.is_finite() {
+                return Err("gain must be finite".into());
+            }
+            Ok(Some(EngineCommand::SetGain {
+                target,
+                db: value.clamp(-72.0, 12.0),
+            }))
+        };
+        Ok(match *self {
+            Self::GetState {} => None,
+            Self::AdjustGain { target, delta_db } => {
+                if !delta_db.is_finite() {
+                    return Err("gain delta must be finite".into());
+                }
+                let old = target_state(target)?.0;
+                // The UI's -infinity sentinel is the lower end of the fader.
+                let old = if old == f32::NEG_INFINITY { -72.0 } else { old };
+                return gain(target, old + delta_db);
+            }
+            Self::SetGain { target, db } => return gain(target, db),
+            Self::ToggleMute { target } => Some(EngineCommand::SetMute {
+                target,
+                mute: !target_state(target)?.1,
+            }),
+            Self::SetMute { target, mute } => {
+                target_state(target)?;
+                Some(EngineCommand::SetMute { target, mute })
+            }
+            Self::ToggleSolo { strip } => Some(EngineCommand::SetSolo {
+                strip,
+                solo: !strip_state(strip)?.solo,
+            }),
+            Self::SetSolo { strip, solo } => {
+                strip_state(strip)?;
+                Some(EngineCommand::SetSolo { strip, solo })
+            }
+            Self::ToggleRoute { strip, bus } | Self::SetRoute { strip, bus, .. } => {
+                let current = strip_state(strip)?;
+                target_state(Target::Bus { bus })?;
+                let on = match *self {
+                    Self::SetRoute { on, .. } => on,
+                    _ => !current.routes.get(&bus).copied().unwrap_or(false),
+                };
+                Some(EngineCommand::SetRoute { strip, bus, on })
+            }
+        })
+    }
+}
+
+#[cfg(test)]
+mod control_tests {
+    use super::*;
+    fn state() -> AppState {
+        AppState {
+            strips: vec![StripState {
+                id: 7,
+                kind: StripKind::Virtual,
+                label: "Music".into(),
+                hw_key: None,
+                online: true,
+                gain_db: -12.0,
+                mute: false,
+                solo: false,
+                routes: [(BusId::A1, true)].into(),
+                gate: GateParams::default(),
+                comp: CompParams::default(),
+                eq: EqParams::default(),
+            }],
+            buses: vec![BusState {
+                id: BusId::A1,
+                label: "Speakers".into(),
+                target_hw_key: Some("test".into()),
+                online: true,
+                gain_db: 0.0,
+                mute: false,
+                limiter: LimiterParams::default(),
+            }],
+            ..AppState::default()
+        }
+    }
+    #[test]
+    fn relative_gain_reads_current_engine_state() {
+        let mut state = state();
+        for _ in 0..10 {
+            let cmd = ControlCommand::AdjustGain {
+                target: Target::Strip { strip: 7 },
+                delta_db: 1.0,
+            };
+            match cmd.resolve(&state).unwrap().unwrap() {
+                EngineCommand::SetGain { db, .. } => state.strips[0].gain_db = db,
+                _ => panic!("wrong command"),
+            }
+        }
+        assert_eq!(state.strips[0].gain_db, -2.0);
+    }
+    #[test]
+    fn gain_is_bounded_and_non_finite_values_are_rejected() {
+        let state = state();
+        let target = Target::Strip { strip: 7 };
+        assert!(matches!(
+            ControlCommand::SetGain { target, db: 1000.0 }
+                .resolve(&state)
+                .unwrap(),
+            Some(EngineCommand::SetGain { db: 12.0, .. })
+        ));
+        assert!(matches!(
+            ControlCommand::SetGain {
+                target,
+                db: -1000.0
+            }
+            .resolve(&state)
+            .unwrap(),
+            Some(EngineCommand::SetGain { db: -72.0, .. })
+        ));
+        assert!(ControlCommand::AdjustGain {
+            target,
+            delta_db: f32::NAN
+        }
+        .resolve(&state)
+        .is_err());
+        assert!(ControlCommand::SetGain {
+            target,
+            db: f32::INFINITY
+        }
+        .resolve(&state)
+        .is_err());
+    }
+    #[test]
+    fn unknown_targets_are_errors_not_silent_success() {
+        let state = state();
+        assert!(ControlCommand::ToggleMute {
+            target: Target::Strip { strip: 999 }
+        }
+        .resolve(&state)
+        .is_err());
+        assert!(ControlCommand::ToggleRoute {
+            strip: 7,
+            bus: BusId::B2
+        }
+        .resolve(&state)
+        .is_err());
+        assert!(ControlCommand::ToggleSolo { strip: 999 }
+            .resolve(&state)
+            .is_err());
+    }
+    #[test]
+    fn toggles_resolve_against_authoritative_state() {
+        let state = state();
+        assert!(matches!(
+            ControlCommand::ToggleMute {
+                target: Target::Strip { strip: 7 }
+            }
+            .resolve(&state)
+            .unwrap(),
+            Some(EngineCommand::SetMute { mute: true, .. })
+        ));
+        assert!(matches!(
+            ControlCommand::ToggleRoute {
+                strip: 7,
+                bus: BusId::A1
+            }
+            .resolve(&state)
+            .unwrap(),
+            Some(EngineCommand::SetRoute { on: false, .. })
+        ));
+    }
+    #[test]
+    fn request_fields_match_the_local_wire_format() {
+        let request: ControlRequest = serde_json::from_str(
+            r#"{"id":3,"command":{"op":"adjust_gain","target":{"strip":7},"deltaDb":0.5}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            request.command,
+            ControlCommand::AdjustGain { delta_db: 0.5, .. }
+        ));
+        assert!(
+            serde_json::from_str::<ControlRequest>(r#"{"id":3,"command":{"op":"shutdown"}}"#)
+                .is_err()
+        );
+        assert!(serde_json::from_str::<Target>(r#"{"strip":7,"bus":"A1"}"#).is_err());
+    }
+    #[test]
+    fn extra_fields_are_rejected_including_for_get_state() {
+        for json in [
+            r#"{"id":1,"command":{"op":"get_state","extra":true}}"#,
+            r#"{"id":1,"extra":true,"command":{"op":"get_state"}}"#,
+            r#"{"id":1,"command":{"op":"set_gain","target":{"strip":7},"db":0,"extra":true}}"#,
+        ] {
+            assert!(
+                serde_json::from_str::<ControlRequest>(json).is_err(),
+                "{json}"
+            );
+        }
+    }
 }
 
 #[cfg(test)]
